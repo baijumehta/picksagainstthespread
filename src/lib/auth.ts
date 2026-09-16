@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 import { and, eq, gt, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { loginTokens, players, sessions, type Player } from "@/db/schema";
-import { sendMail } from "./mail";
+import { sendMail, signInEmailHtml } from "./mail";
 import { appBaseUrl } from "./base-url";
 
 const SESSION_COOKIE = "pool_session";
@@ -44,6 +44,7 @@ export async function requestLoginLink(rawEmail: string): Promise<void> {
       `Hi ${player.initials},\n\n` +
       `Open this link to sign in and make your picks:\n${url}\n\n` +
       `It expires in ${TOKEN_MINUTES} minutes and works once.\n`,
+    html: signInEmailHtml(player.initials, url, TOKEN_MINUTES),
   });
 }
 

@@ -14,7 +14,8 @@
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx scripts/seed.ts",
     "db:demo": "tsx scripts/demo.ts",
-    "import:week": "tsx scripts/import-week.ts"
+    "import:week": "tsx scripts/import-week.ts",
+    "mail:test": "tsx scripts/mail-test.ts"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.2",
