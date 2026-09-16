@@ -1,26 +1,78 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --background: #f6f7f9;
+  --surface: #ffffff;
+  --surface-2: #f0f2f5;
+  --foreground: #16181d;
+  --muted: #5d6573;
+  --border: #dfe3e9;
+  --accent: #1f6feb;
+  --accent-fg: #ffffff;
+  --win: #157f3d;
+  --win-bg: #e4f5ea;
+  --loss: #b4232c;
+  --loss-bg: #fdeaea;
+  --push: #8a6d1f;
+  --push-bg: #fbf3de;
+  --live: #b2590a;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #0d1117;
+    --surface: #161b22;
+    --surface-2: #1c232d;
+    --foreground: #e7edf3;
+    --muted: #9099a6;
+    --border: #2a323d;
+    --accent: #4b8bf5;
+    --accent-fg: #06101f;
+    --win: #56d97f;
+    --win-bg: #10301c;
+    --loss: #ff7b72;
+    --loss-bg: #3a1417;
+    --push: #e3c56b;
+    --push-bg: #33290d;
+    --live: #ffa657;
   }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-line: var(--border);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-win: var(--win);
+  --color-win-bg: var(--win-bg);
+  --color-loss: var(--loss);
+  --color-loss-bg: var(--loss-bg);
+  --color-push: var(--push);
+  --color-push-bg: var(--push-bg);
+  --color-live: var(--live);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Sticky first column for the wide pick grid. */
+.grid-sticky-col {
+  position: sticky;
+  left: 0;
+  background: var(--surface);
+  z-index: 1;
+}
+
+@keyframes livePulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+.live-dot { animation: livePulse 1.6s ease-in-out infinite; }
