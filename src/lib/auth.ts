@@ -99,12 +99,15 @@ export async function getCurrentPlayer(): Promise<Player | null> {
   const token = jar.get(SESSION_COOKIE)?.value;
   if (!token) return null;
 
-  const row = await db.query.sessions.findFirst({
-    where: and(eq(sessions.tokenHash, sha256(token)), gt(sessions.expiresAt, new Date())),
-  });
-  if (!row) return null;
-
-  const player = await db.query.players.findFirst({ where: eq(players.id, row.playerId) });
+  // The layout calls this on every page, so resolve session and player in
+  // one round trip instead of two.
+  const [row] = await db
+    .select({ player: players })
+    .from(sessions)
+    .innerJoin(players, eq(players.id, sessions.playerId))
+    .where(and(eq(sessions.tokenHash, sha256(token)), gt(sessions.expiresAt, new Date())))
+    .limit(1);
+  const player = row?.player;
   return player && player.isActive ? player : null;
 }
 

@@ -53,24 +53,24 @@ export async function getWeekBundle(weekId: number) {
   const week = await db.query.weeks.findFirst({ where: eq(weeks.id, weekId) });
   if (!week) return null;
 
-  const weekGames = await db.query.games.findMany({
-    where: eq(games.weekId, weekId),
-    orderBy: [asc(games.kickoffAt), asc(games.sortOrder)],
-  });
-
-  const activePlayers = await db.query.players.findMany({
-    where: eq(players.isActive, true),
-    orderBy: [asc(players.initials)],
-  });
+  // These do not depend on each other, so run them together rather than
+  // paying a database round trip for each in turn.
+  const [weekGames, activePlayers, entries] = await Promise.all([
+    db.query.games.findMany({
+      where: eq(games.weekId, weekId),
+      orderBy: [asc(games.kickoffAt), asc(games.sortOrder)],
+    }),
+    db.query.players.findMany({
+      where: eq(players.isActive, true),
+      orderBy: [asc(players.initials)],
+    }),
+    db.query.weekEntries.findMany({ where: eq(weekEntries.weekId, weekId) }),
+  ]);
 
   const gameIds = weekGames.map((g) => g.id);
   const weekPicks = gameIds.length
     ? await db.select().from(picks).where(inArray(picks.gameId, gameIds))
     : [];
-
-  const entries = await db.query.weekEntries.findMany({
-    where: eq(weekEntries.weekId, weekId),
-  });
 
   const tiebreakerGame = week.tiebreakerGameId
     ? weekGames.find((g) => g.id === week.tiebreakerGameId) ?? null
@@ -93,22 +93,22 @@ export async function getSeasonWeeks(seasonId: number) {
   if (!published.length) return { weeks: [], games: [], picks: [], entries: [], players: [] };
 
   const weekIds = published.map((w) => w.id);
-  const allGames = await db.query.games.findMany({
-    where: inArray(games.weekId, weekIds),
-    orderBy: [asc(games.kickoffAt)],
-  });
+  const [allGames, allEntries, activePlayers] = await Promise.all([
+    db.query.games.findMany({
+      where: inArray(games.weekId, weekIds),
+      orderBy: [asc(games.kickoffAt)],
+    }),
+    db.query.weekEntries.findMany({ where: inArray(weekEntries.weekId, weekIds) }),
+    db.query.players.findMany({
+      where: eq(players.isActive, true),
+      orderBy: [asc(players.initials)],
+    }),
+  ]);
   const gameIds = allGames.map((g) => g.id);
 
   const allPicks = gameIds.length
     ? await db.select().from(picks).where(inArray(picks.gameId, gameIds))
     : [];
-  const allEntries = await db.query.weekEntries.findMany({
-    where: inArray(weekEntries.weekId, weekIds),
-  });
-  const activePlayers = await db.query.players.findMany({
-    where: eq(players.isActive, true),
-    orderBy: [asc(players.initials)],
-  });
 
   return {
     weeks: published,
