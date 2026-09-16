@@ -94,7 +94,7 @@ export default async function SeasonPage() {
       <Card>
         <CardHeader
           title="Year to date"
-          subtitle="Two ways to win: take an individual week, or finish the year on top."
+          subtitle="Ordered on correct picks. Weeks won is the pool's other prize and does not affect this order, so players level on picks are shown level."
         />
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -102,7 +102,7 @@ export default async function SeasonPage() {
               <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-muted">
                 <th scope="col" className="w-12 px-4 py-2 font-medium">#</th>
                 <th scope="col" className="px-2 py-2 font-medium">Player</th>
-                <th scope="col" className="px-2 py-2 text-right font-medium">Score</th>
+                <th scope="col" className="px-2 py-2 text-right font-medium">Correct</th>
                 <th scope="col" className="px-2 py-2 text-right font-medium">L</th>
                 <th scope="col" className="px-2 py-2 text-right font-medium">P</th>
                 <th scope="col" className="px-2 py-2 text-right font-medium">Pct</th>

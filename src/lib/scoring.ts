@@ -188,9 +188,9 @@ export interface SeasonWeekInput {
 /**
  * Roll weekly results into a season table.
  *
- * The pool has two prizes: winning an individual week, and the highest total
- * for the year. Those are different questions, so both are tracked here --
- * `weeksWon` and `totalWins`.
+ * The pool has two separate prizes: winning an individual week, and the most
+ * correct picks over the year. `weeksWon` counts the first, `totalWins`
+ * decides the second. They do not feed into each other.
  */
 export function buildSeasonStandings(weeks: SeasonWeekInput[]): SeasonRow[] {
   const byPlayer = new Map<string, SeasonRow>();
@@ -229,18 +229,23 @@ export function buildSeasonStandings(weeks: SeasonWeekInput[]): SeasonRow[] {
   return sortSeason([...byPlayer.values()]);
 }
 
-/** Season score first, then weeks won, then accuracy. */
+/**
+ * The year is decided on correct picks, full stop.
+ *
+ * Weeks won is the other prize, not a tiebreaker for this one -- two players
+ * on the same number of correct picks are genuinely level, and the table has
+ * to say so. Remaining order is alphabetical purely so the rows do not move
+ * about between renders.
+ */
 export function sortSeason(rows: SeasonRow[]): SeasonRow[] {
   return [...rows].sort((a, b) => {
     if (b.totalWins !== a.totalWins) return b.totalWins - a.totalWins;
-    if (b.weeksWon !== a.weeksWon) return b.weeksWon - a.weeksWon;
-    if (b.winPct !== a.winPct) return b.winPct - a.winPct;
     return a.initials.localeCompare(b.initials);
   });
 }
 
 export function withSeasonRanks(rows: SeasonRow[]): (SeasonRow & { rank: number })[] {
-  const key = (r: SeasonRow) => `${r.totalWins}|${r.weeksWon}|${r.winPct.toFixed(6)}`;
+  const key = (r: SeasonRow) => String(r.totalWins);
   let lastKey: string | null = null;
   let lastRank = 0;
   return rows.map((row, i) => {

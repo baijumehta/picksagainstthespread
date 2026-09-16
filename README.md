@@ -16,12 +16,17 @@ Three faces:
 
 - **One point per correct pick** against the spread. A push (the game lands
   exactly on the number) is worth nothing to anybody and costs nothing.
-- **Two ways to win.** Take an individual week, or finish the year with the
-  highest total. They are tracked separately: `/` is the current week, `/season`
-  is the year to date with a `weeks won` column alongside the season score.
+- **Two ways to win**, kept strictly apart:
+  - **The week** — most correct picks that week, ties settled by the tiebreaker.
+  - **The year** — most correct picks across the whole season. Nothing else
+    feeds into it: winning weeks does not move you up the season table, and two
+    players on the same number of correct picks are shown as genuinely level.
+
+  `/` is the current week, `/season` is the year to date. The season table shows
+  `weeks won` alongside, but only as information — it is the other prize, not a
+  tiebreaker for this one.
 - **Tiebreaker**: closest guess to the combined points in the nominated game —
-  normally Monday night. It settles a tied week; the season table breaks ties on
-  weeks won, then accuracy.
+  normally Monday night. It settles a tied *week*.
 - **Picks lock per game, at that game's own kickoff.** The Thursday nighter
   closes Thursday while the Sunday slate stays open. A pick stays hidden from
   the public board until its game locks.

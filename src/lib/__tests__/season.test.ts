@@ -99,13 +99,35 @@ test("someone who sat a week out is not credited with playing it", () => {
   assert.equal(ab.weeksPlayed, 2);
 });
 
-test("weeks won breaks a tie on season score", () => {
+test("the year is decided on correct picks alone", () => {
   const rows = withSeasonRanks(buildSeasonStandings([
     week(1, true, { AB: { wins: 12, losses: 4 }, CD: { wins: 8, losses: 8 } }),
     week(2, true, { AB: { wins: 8, losses: 8 }, CD: { wins: 12, losses: 4 } }),
   ]));
-  // Both on 20. AB and CD each took a week, so they stay genuinely tied.
   assert.equal(rows[0].totalWins, 20);
   assert.equal(rows[1].totalWins, 20);
+  assert.deepEqual(rows.map((r) => r.rank), [1, 1], "level on picks means level");
+});
+
+test("winning a week does not push you up the season table", () => {
+  // The real Week 1: BM and OB1 both went 11-5, BM took the week on the
+  // tiebreaker. For the year they are level on 11, and must show as level.
+  const rows = withSeasonRanks(buildSeasonStandings([
+    week(1, true, { BM: { wins: 11, losses: 5 }, OB1: { wins: 11, losses: 5 } }),
+  ]));
+  const bm = rows.find((r) => r.initials === "BM")!;
+  const ob1 = rows.find((r) => r.initials === "OB1")!;
+  assert.equal(bm.totalWins, ob1.totalWins);
+  assert.equal(bm.rank, ob1.rank, "same correct picks means the same season rank");
+  assert.equal(bm.rank, 1);
+});
+
+test("fewer weeks played does not cost you season rank if the picks match", () => {
+  // Accuracy is shown, but it must not reorder the table: 11 correct picks
+  // is 11 correct picks however many weeks it took.
+  const rows = withSeasonRanks(buildSeasonStandings([
+    week(1, true, { AB: { wins: 11, losses: 5 }, CD: { wins: 0, losses: 0 } }),
+    week(2, true, { AB: { wins: 0, losses: 16 }, CD: { wins: 11, losses: 5 } }),
+  ]));
   assert.deepEqual(rows.map((r) => r.rank), [1, 1]);
 });
