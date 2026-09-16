@@ -58,26 +58,22 @@ function parseEvents(json: any, league: League): EspnGame[] {
 }
 
 /**
- * ESPN's public scoreboard 403s a bare server-side request from a datacenter
- * IP -- it works from a laptop and fails from Vercel. Sending the headers a
- * browser would send gets it through; the bot heuristic is what rejects us,
- * not the address itself.
+ * Send no headers of our own.
+ *
+ * This is load-bearing, and counter-intuitive. From Vercel, ESPN 403s a
+ * request carrying a custom `user-agent` (a plain "picks-pool/1.0" is
+ * rejected), and 403s harder for a spoofed Chrome one -- a Chrome UA arriving
+ * with three headers and no cookies reads as synthetic. A request with no
+ * user-agent at all is served normally. Verified by probing every variant from
+ * a real deployment: bare 200, spoofed-Chrome 403.
+ *
+ * So do not "improve" this by adding headers.
  *
  * Bounded so a slow upstream can never hang a page render.
  */
-const BROWSER_HEADERS: Record<string, string> = {
-  "user-agent":
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
-  accept: "application/json, text/plain, */*",
-  "accept-language": "en-US,en;q=0.9",
-  referer: "https://www.espn.com/",
-  origin: "https://www.espn.com",
-};
-
 async function get(url: string, timeoutMs = 8000): Promise<any> {
   const res = await fetch(url, {
     cache: "no-store",
-    headers: BROWSER_HEADERS,
     signal: AbortSignal.timeout(timeoutMs),
   });
   if (!res.ok) throw new Error(`ESPN ${res.status} for ${url}`);
