@@ -20,7 +20,12 @@ export async function GET(request: NextRequest) {
 
   try {
     const result = await refreshAllOpenWeeks();
-    return NextResponse.json({ ok: true, ...result });
+    // A failed upstream must not read as a clean run, or a broken feed stays
+    // invisible until somebody notices the scores are stale.
+    return NextResponse.json(
+      { ok: result.errors.length === 0, ...result },
+      { status: result.errors.length ? 502 : 200 },
+    );
   } catch (err) {
     return NextResponse.json(
       { ok: false, error: err instanceof Error ? err.message : "failed" },

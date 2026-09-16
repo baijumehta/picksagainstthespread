@@ -57,11 +57,27 @@ function parseEvents(json: any, league: League): EspnGame[] {
   return out.sort((a, b) => a.kickoffAt.getTime() - b.kickoffAt.getTime());
 }
 
-/** Bounded so a slow upstream can never hang a page render. */
+/**
+ * ESPN's public scoreboard 403s a bare server-side request from a datacenter
+ * IP -- it works from a laptop and fails from Vercel. Sending the headers a
+ * browser would send gets it through; the bot heuristic is what rejects us,
+ * not the address itself.
+ *
+ * Bounded so a slow upstream can never hang a page render.
+ */
+const BROWSER_HEADERS: Record<string, string> = {
+  "user-agent":
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+  accept: "application/json, text/plain, */*",
+  "accept-language": "en-US,en;q=0.9",
+  referer: "https://www.espn.com/",
+  origin: "https://www.espn.com",
+};
+
 async function get(url: string, timeoutMs = 8000): Promise<any> {
   const res = await fetch(url, {
     cache: "no-store",
-    headers: { "user-agent": "picks-pool/1.0" },
+    headers: BROWSER_HEADERS,
     signal: AbortSignal.timeout(timeoutMs),
   });
   if (!res.ok) throw new Error(`ESPN ${res.status} for ${url}`);
@@ -86,23 +102,39 @@ export async function fetchCollegeDay(date: Date): Promise<EspnGame[]> {
   return parseEvents(await get(url), "ncaaf");
 }
 
-/** Live scores for a set of ESPN ids, fetched per league per day. */
+export interface ScoreFetch {
+  games: Map<string, EspnGame>;
+  /** One message per day that could not be fetched. */
+  errors: string[];
+}
+
+/**
+ * Live scores for a set of ESPN ids, fetched per league per day.
+ *
+ * Failures are returned, not just logged. Swallowing them meant a totally
+ * broken upstream still reported a clean run, which is how a 403 from
+ * production went unnoticed.
+ */
 export async function fetchScoresForDates(
   league: League,
   dates: Date[],
-): Promise<Map<string, EspnGame>> {
+): Promise<ScoreFetch> {
   const unique = [...new Set(dates.map(toEspnDate))];
-  const found = new Map<string, EspnGame>();
+  const games = new Map<string, EspnGame>();
+  const errors: string[] = [];
+
   for (const stamp of unique) {
     const extra = league === "ncaaf" ? "&groups=80&limit=300" : "";
     const url = `${BASE}/${PATH[league]}/scoreboard?dates=${stamp}${extra}`;
     try {
-      for (const g of parseEvents(await get(url), league)) found.set(g.espnId, g);
+      for (const g of parseEvents(await get(url), league)) games.set(g.espnId, g);
     } catch (err) {
-      console.error(`[espn] score fetch failed for ${league} ${stamp}:`, err);
+      const message = `${league} ${stamp}: ${err instanceof Error ? err.message : String(err)}`;
+      console.error(`[espn] score fetch failed for ${message}`);
+      errors.push(message);
     }
   }
-  return found;
+  return { games, errors };
 }
 
 /** ESPN wants YYYYMMDD in US Eastern, which is how its slate is bucketed. */

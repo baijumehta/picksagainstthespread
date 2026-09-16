@@ -111,17 +111,25 @@ export async function syncSpreads(weekId: number): Promise<SpreadSyncResult> {
 /* Live scores                                                         */
 /* ------------------------------------------------------------------ */
 
+export interface RefreshResult {
+  checked: number;
+  changed: number;
+  /** Upstream failures, so a broken feed cannot look like a clean run. */
+  errors: string[];
+}
+
 /**
  * Refresh scores for every game in a week that is not already final.
  * Cheap enough to run every minute during the slate.
  */
-export async function refreshScores(weekId: number): Promise<{ checked: number; changed: number }> {
+export async function refreshScores(weekId: number): Promise<RefreshResult> {
   const open = await db.query.games.findMany({
     where: (t, { and, eq: e }) => and(e(t.weekId, weekId), ne(t.status, "final")),
   });
-  if (!open.length) return { checked: 0, changed: 0 };
+  if (!open.length) return { checked: 0, changed: 0, errors: [] };
 
   let changed = 0;
+  const errors: string[] = [];
   const byLeague = new Map<League, typeof open>();
   for (const g of open) {
     const list = byLeague.get(g.league) ?? [];
@@ -130,7 +138,11 @@ export async function refreshScores(weekId: number): Promise<{ checked: number; 
   }
 
   for (const [league, list] of byLeague) {
-    const live = await fetchScoresForDates(league, list.map((g) => g.kickoffAt));
+    const { games: live, errors: fetchErrors } = await fetchScoresForDates(
+      league,
+      list.map((g) => g.kickoffAt),
+    );
+    errors.push(...fetchErrors);
     for (const game of list) {
       const fresh = game.espnId ? live.get(game.espnId) : undefined;
       if (!fresh) continue;
@@ -151,7 +163,7 @@ export async function refreshScores(weekId: number): Promise<{ checked: number; 
       changed++;
     }
   }
-  return { checked: open.length, changed };
+  return { checked: open.length, changed, errors };
 }
 
 /** True when a game has started but has not been marked final yet. */
@@ -205,15 +217,18 @@ export async function refreshAllOpenWeeks() {
     .from(games)
     .where(ne(games.status, "final"));
   const weekIds = [...new Set(openGameRows.map((r) => r.weekId))];
-  if (!weekIds.length) return { weeks: 0, changed: 0 };
+  if (!weekIds.length) return { weeks: 0, changed: 0, errors: [] };
 
   const published = await db.query.weeks.findMany({
     where: inArray(weeks.id, weekIds),
   });
 
   let changed = 0;
+  const errors: string[] = [];
   for (const week of published.filter((w) => w.isPublished)) {
-    changed += (await refreshScores(week.id)).changed;
+    const result = await refreshScores(week.id);
+    changed += result.changed;
+    errors.push(...result.errors);
   }
-  return { weeks: published.length, changed };
+  return { weeks: published.length, changed, errors };
 }

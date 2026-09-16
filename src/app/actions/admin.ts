@@ -173,8 +173,16 @@ export async function removeGameAction(gameId: string): Promise<Result> {
 
 export async function refreshScoresAction(weekId: number): Promise<Result> {
   await requireAdmin();
-  const { checked, changed } = await refreshScores(weekId);
+  const { checked, changed, errors } = await refreshScores(weekId);
   bump(weekId);
+  if (errors.length) {
+    return {
+      ok: false,
+      message: `Could not reach ESPN: ${errors[0]}${
+        errors.length > 1 ? ` (and ${errors.length - 1} more)` : ""
+      }`,
+    };
+  }
   return { ok: true, message: `Checked ${checked} open games, updated ${changed}.` };
 }
 
