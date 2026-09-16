@@ -4,6 +4,13 @@ import * as schema from "./schema";
 
 type DB = PostgresJsDatabase<typeof schema>;
 
+// One client per process, in every environment.
+//
+// This used to be cached only outside production, which meant every property
+// access on `db` (so every query) built a fresh postgres client and paid a
+// full TCP + TLS + auth handshake to the hosted database -- ten-plus times per
+// page render -- and the abandoned clients leaked until their idle timeout.
+// Living on globalThis keeps the instance across dev hot reloads too.
 const globalForDb = globalThis as unknown as {
   _pgClient?: ReturnType<typeof postgres>;
   _drizzle?: DB;
@@ -32,10 +39,8 @@ function connect(): DB {
       connect_timeout: 10,
     });
   const instance = drizzle(client, { schema });
-  if (process.env.NODE_ENV !== "production") {
-    globalForDb._pgClient = client;
-    globalForDb._drizzle = instance;
-  }
+  globalForDb._pgClient = client;
+  globalForDb._drizzle = instance;
   return instance;
 }
 
