@@ -43,3 +43,10 @@ next-env.d.ts
 
 .vercel
 .env*
+
+# local scratch
+_q.ts
+_check.ts
+_apply.ts
+_pgstart.ts
+.vc_*
