@@ -95,7 +95,8 @@ async function parseSheet(file: string): Promise<ParsedSheet> {
     initials.push(v);
     columnFor.set(v, c);
   }
-  if (!initials.length) throw new Error("No player columns found next to the header.");
+  // A blank sheet sent out before the week has lines but no player columns.
+  // That is a normal thing to import: it sets the spreads and nothing else.
 
   // 3. Game rows come in away/HOME pairs until the tiebreaker or a gap.
   const gamesOut: SheetGame[] = [];
@@ -168,7 +169,11 @@ async function main() {
     throw new Error("Could not work out the week number; pass --week.");
   }
 
-  console.log(`Sheet: week ${weekNumber}, ${parsed.games.length} games, ${parsed.initials.length} players`);
+  console.log(
+    parsed.initials.length
+      ? `Sheet: week ${weekNumber}, ${parsed.games.length} games, ${parsed.initials.length} players`
+      : `Sheet: week ${weekNumber}, ${parsed.games.length} games, lines only (no picks on this sheet)`,
+  );
   const unmapped = parsed.games.filter((g) => !g.awayAbbr || !g.homeAbbr);
   for (const g of unmapped) console.warn(`  ! could not map: ${g.awayRaw} at ${g.homeRaw}`);
   if (parsed.games.length === 0) throw new Error("No games parsed; is this the right sheet?");
