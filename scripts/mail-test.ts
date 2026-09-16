@@ -8,7 +8,7 @@
  * alike and are fixed in different places.
  */
 import "./env";
-import { mailIsConfigured, sendMail } from "../src/lib/mail";
+import { mailFrom, mailIsConfigured, mailProvider, sendMail } from "../src/lib/mail";
 
 function arg(name: string): string | undefined {
   const i = process.argv.indexOf(`--${name}`);
@@ -22,8 +22,8 @@ async function main() {
     process.exit(1);
   }
 
-  const from = process.env.MAIL_FROM ?? "Picks Pool <onboarding@resend.dev>";
-  console.log(`configured : ${mailIsConfigured() ? "yes (RESEND_API_KEY set)" : "NO - will print to console instead"}`);
+  const from = mailFrom();
+  console.log(`provider   : ${mailProvider()}${mailIsConfigured() ? "" : " (will print to console, not send)"}`);
   console.log(`from       : ${from}`);
   console.log(`to         : ${to}\n`);
 
@@ -37,19 +37,23 @@ async function main() {
     console.log(
       mailIsConfigured()
         ? "Sent. Check that inbox (and its spam folder)."
-        : "Printed above -- set RESEND_API_KEY to send for real.",
+        : "Printed above -- set SMTP2GO_API_KEY (or RESEND_API_KEY) to send for real.",
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`\nFAILED: ${message}\n`);
-    if (message.includes("403") || /domain/i.test(message)) {
+    if (/SMTP2GO/i.test(message)) {
       console.error(
-        "That usually means the sending domain in MAIL_FROM is not verified.\n" +
-        "Either verify your domain in Resend, or use onboarding@resend.dev --\n" +
-        "which can only send to the address that owns the Resend account.",
+        "Usually one of:\n" +
+        "  - the address in MAIL_FROM is not a verified sender or domain on the\n" +
+        "    SMTP2GO account\n" +
+        "  - the API key does not have send permission\n" +
+        "  - the recipient is on the account's suppression list",
       );
+    } else if (message.includes("403") || /domain/i.test(message)) {
+      console.error("That usually means the sending domain in MAIL_FROM is not verified.");
     } else if (message.includes("401")) {
-      console.error("Resend rejected the key. Check RESEND_API_KEY.");
+      console.error("The provider rejected the API key.");
     }
     process.exit(1);
   }

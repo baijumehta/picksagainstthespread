@@ -1,6 +1,10 @@
 /**
- * Phase one only needs sign-in links. Phase two ("nudge the people who have
- * not picked") reuses sendMail, so keep this the single outbound path.
+ * The single outbound email path. Phase one uses it for sign-in links; phase
+ * two ("nudge whoever has not picked") will reuse it.
+ *
+ * Provider is chosen by whichever key is present: SMTP2GO first, then Resend,
+ * otherwise the message is printed to the console so local dev works with no
+ * account at all.
  */
 export interface MailMessage {
   to: string;
@@ -10,49 +14,103 @@ export interface MailMessage {
   html?: string;
 }
 
-export class MailNotConfiguredError extends Error {
-  constructor() {
-    super("RESEND_API_KEY is not set, so nothing can be emailed yet.");
-    this.name = "MailNotConfiguredError";
-  }
+export type MailProvider = "smtp2go" | "resend" | "console";
+
+export function mailProvider(): MailProvider {
+  if (process.env.SMTP2GO_API_KEY) return "smtp2go";
+  if (process.env.RESEND_API_KEY) return "resend";
+  return "console";
 }
 
 export function mailIsConfigured(): boolean {
-  return Boolean(process.env.RESEND_API_KEY);
+  return mailProvider() !== "console";
+}
+
+export function mailFrom(): string {
+  return process.env.MAIL_FROM ?? "Picks Pool <onboarding@resend.dev>";
 }
 
 export async function sendMail(msg: MailMessage): Promise<void> {
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.MAIL_FROM ?? "Picks Pool <onboarding@resend.dev>";
+  switch (mailProvider()) {
+    case "smtp2go": return sendViaSmtp2go(msg);
+    case "resend": return sendViaResend(msg);
+    default: return printToConsole(msg);
+  }
+}
 
-  if (!apiKey) {
-    // No provider configured yet -- print it so local dev still works.
-    console.log(
-      `\n[mail] (no RESEND_API_KEY, printing instead)\n  to: ${msg.to}\n  subject: ${msg.subject}\n  ${msg.text}\n`,
-    );
-    return;
+function printToConsole(msg: MailMessage): void {
+  console.log(
+    `\n[mail] (no provider configured, printing instead)\n  to: ${msg.to}\n  subject: ${msg.subject}\n  ${msg.text}\n`,
+  );
+}
+
+/**
+ * SMTP2GO answers 200 with a JSON body even when the send failed, so the
+ * status code alone means nothing -- the outcome is in data.succeeded /
+ * data.failed. Checking only res.ok would report success for every rejected
+ * recipient.
+ */
+async function sendViaSmtp2go(msg: MailMessage): Promise<void> {
+  const res = await fetch("https://api.smtp2go.com/v3/email/send", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "X-Smtp2go-Api-Key": process.env.SMTP2GO_API_KEY!,
+      accept: "application/json",
+    },
+    body: JSON.stringify({
+      sender: mailFrom(),
+      to: [msg.to],
+      subject: msg.subject,
+      text_body: msg.text,
+      ...(msg.html ? { html_body: msg.html } : {}),
+    }),
+    signal: AbortSignal.timeout(15_000),
+  });
+
+  const raw = await res.text();
+  if (!res.ok) throw new Error(`SMTP2GO ${res.status}: ${raw}`);
+
+  let body: {
+    data?: { succeeded?: number; failed?: number; failures?: unknown[]; error?: string };
+  };
+  try {
+    body = JSON.parse(raw);
+  } catch {
+    throw new Error(`SMTP2GO returned something that is not JSON: ${raw.slice(0, 200)}`);
   }
 
+  const succeeded = body.data?.succeeded ?? 0;
+  const failed = body.data?.failed ?? 0;
+  if (succeeded < 1 || failed > 0) {
+    const detail =
+      body.data?.error ??
+      (body.data?.failures?.length ? JSON.stringify(body.data.failures) : raw.slice(0, 300));
+    throw new Error(`SMTP2GO accepted the request but sent nothing: ${detail}`);
+  }
+}
+
+async function sendViaResend(msg: MailMessage): Promise<void> {
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
-      authorization: `Bearer ${apiKey}`,
+      authorization: `Bearer ${process.env.RESEND_API_KEY!}`,
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      from,
+      from: mailFrom(),
       to: [msg.to],
       subject: msg.subject,
       text: msg.text,
       ...(msg.html ? { html: msg.html } : {}),
     }),
+    signal: AbortSignal.timeout(15_000),
   });
 
   if (!res.ok) {
-    const body = await res.text();
-    // Resend's own message is the useful part -- an unverified sending domain
-    // and a bad key look nothing alike, and the caller only sees a log line.
-    throw new Error(`Resend ${res.status}: ${body}`);
+    // Keep the provider's own wording: a bad key and an unverified sending
+    // domain look nothing alike and are fixed in different places.
+    throw new Error(`Resend ${res.status}: ${await res.text()}`);
   }
 }
 
