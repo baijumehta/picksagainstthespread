@@ -5,6 +5,7 @@ import { and, eq, gt, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { loginTokens, players, sessions, type Player } from "@/db/schema";
 import { sendMail } from "./mail";
+import { appBaseUrl } from "./base-url";
 
 const SESSION_COOKIE = "pool_session";
 const SESSION_DAYS = 60;
@@ -35,8 +36,7 @@ export async function requestLoginLink(rawEmail: string): Promise<void> {
     expiresAt,
   });
 
-  const base = process.env.APP_URL ?? "http://localhost:3000";
-  const url = `${base}/login/verify?token=${token}`;
+  const url = `${appBaseUrl()}/login/verify?token=${token}`;
   await sendMail({
     to: player.email,
     subject: "Your sign-in link for the picks pool",
