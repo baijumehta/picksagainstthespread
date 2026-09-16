@@ -122,6 +122,11 @@ export async function syncSpreadsAction(weekId: number): Promise<Result> {
 
   const bits = [`Updated ${res.updated} ${res.updated === 1 ? "line" : "lines"}.`];
   if (res.skippedManual) bits.push(`Left ${res.skippedManual} of your own lines alone.`);
+  if (res.hooked.length) {
+    bits.push(
+      `Hooked ${res.hooked.length} whole ${res.hooked.length === 1 ? "number" : "numbers"} onto the favourite: ${res.hooked.join(", ")}.`,
+    );
+  }
   if (res.unmatched.length) bits.push(`No line found for: ${res.unmatched.join(", ")}.`);
   return { ok: true, message: bits.join(" ") };
 }

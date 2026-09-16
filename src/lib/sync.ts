@@ -2,7 +2,7 @@ import { eq, inArray, ne } from "drizzle-orm";
 import { db } from "@/db";
 import { games, weeks, type League } from "@/db/schema";
 import { fetchNflWeek, fetchScoresForDates, type EspnGame } from "./espn";
-import { fetchSpreads, findLineFor, OddsNotConfiguredError } from "./odds";
+import { fetchSpreads, findLineFor, hookWholeNumber, OddsNotConfiguredError } from "./odds";
 
 /* ------------------------------------------------------------------ */
 /* Importing a slate                                                   */
@@ -65,6 +65,8 @@ export interface SpreadSyncResult {
   updated: number;
   unmatched: string[];
   skippedManual: number;
+  /** Lines the book posted as whole numbers, hooked onto the favourite. */
+  hooked: string[];
   error?: string;
 }
 
@@ -74,7 +76,7 @@ export interface SpreadSyncResult {
  */
 export async function syncSpreads(weekId: number): Promise<SpreadSyncResult> {
   const weekGames = await db.query.games.findMany({ where: eq(games.weekId, weekId) });
-  if (!weekGames.length) return { updated: 0, unmatched: [], skippedManual: 0 };
+  if (!weekGames.length) return { updated: 0, unmatched: [], skippedManual: 0, hooked: [] };
 
   const leagues = [...new Set(weekGames.map((g) => g.league))] as League[];
   const linesByLeague = new Map<League, Awaited<ReturnType<typeof fetchSpreads>>>();
@@ -88,23 +90,29 @@ export async function syncSpreads(weekId: number): Promise<SpreadSyncResult> {
       err instanceof OddsNotConfiguredError
         ? err.message
         : err instanceof Error ? err.message : "Odds lookup failed.";
-    return { updated: 0, unmatched: [], skippedManual: 0, error: message };
+    return { updated: 0, unmatched: [], skippedManual: 0, hooked: [], error: message };
   }
 
   let updated = 0, skippedManual = 0;
   const unmatched: string[] = [];
+  const hooked: string[] = [];
 
   for (const game of weekGames) {
     if (game.spreadIsManual) { skippedManual++; continue; }
     const line = findLineFor(game, linesByLeague.get(game.league) ?? []);
     if (!line) { unmatched.push(`${game.awayTeam} at ${game.homeTeam}`); continue; }
 
+    const spread = hookWholeNumber(line.homeSpread);
+    if (spread !== line.homeSpread) {
+      hooked.push(`${game.awayAbbr ?? game.awayTeam} at ${game.homeAbbr ?? game.homeTeam} (${line.homeSpread} -> ${spread})`);
+    }
+
     await db.update(games)
-      .set({ spread: line.homeSpread.toFixed(1), updatedAt: new Date() })
+      .set({ spread: spread.toFixed(1), updatedAt: new Date() })
       .where(eq(games.id, game.id));
     updated++;
   }
-  return { updated, unmatched, skippedManual };
+  return { updated, unmatched, skippedManual, hooked };
 }
 
 /* ------------------------------------------------------------------ */

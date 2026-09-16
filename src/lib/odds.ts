@@ -16,6 +16,27 @@ export interface OddsLine {
   bookmaker: string;
 }
 
+/**
+ * Move a whole-number line half a point onto the favourite.
+ *
+ * No sportsbook avoids whole numbers -- 3 is the most common NFL margin of
+ * victory, so -3 is the most common spread, and every book posts it (they
+ * price the risk in the juice, which we never see). The pool has always run
+ * half-point cards, so the number gets hooked here instead.
+ *
+ * The favourite always has to win by one more:
+ *   -3 (home favoured)  -> -3.5, home must win by 4
+ *   +3 (away favoured)  -> +3.5, away must win by 4
+ * which is simply "move away from zero".
+ *
+ * A pick 'em has no favourite to hook toward, so it is left alone and can
+ * still push.
+ */
+export function hookWholeNumber(spread: number): number {
+  if (!Number.isInteger(spread) || spread === 0) return spread;
+  return spread < 0 ? spread - 0.5 : spread + 0.5;
+}
+
 export class OddsNotConfiguredError extends Error {
   constructor() {
     super("ODDS_API_KEY is not set, so spreads must be entered by hand.");
