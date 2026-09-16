@@ -158,6 +158,98 @@ export function sortStandings(rows: StandingRow[]): StandingRow[] {
   });
 }
 
+/* ------------------------------------------------------------------ */
+/* Season totals                                                       */
+/* ------------------------------------------------------------------ */
+
+export interface SeasonRow {
+  playerId: string;
+  initials: string;
+  /** Correct picks across every week. This is the season score. */
+  totalWins: number;
+  totalLosses: number;
+  totalPushes: number;
+  /** Weeks where they finished first. Ties count for everyone tied. */
+  weeksWon: number;
+  /** Weeks where they submitted at least one pick. */
+  weeksPlayed: number;
+  /** Decided picks, for a win percentage that is fair to late joiners. */
+  decided: number;
+  winPct: number;
+}
+
+export interface SeasonWeekInput {
+  weekId: number;
+  /** Only a finished week can have a winner. */
+  isComplete: boolean;
+  rows: StandingRow[];
+}
+
+/**
+ * Roll weekly results into a season table.
+ *
+ * The pool has two prizes: winning an individual week, and the highest total
+ * for the year. Those are different questions, so both are tracked here --
+ * `weeksWon` and `totalWins`.
+ */
+export function buildSeasonStandings(weeks: SeasonWeekInput[]): SeasonRow[] {
+  const byPlayer = new Map<string, SeasonRow>();
+
+  const ensure = (playerId: string, initials: string): SeasonRow => {
+    let row = byPlayer.get(playerId);
+    if (!row) {
+      row = {
+        playerId, initials,
+        totalWins: 0, totalLosses: 0, totalPushes: 0,
+        weeksWon: 0, weeksPlayed: 0, decided: 0, winPct: 0,
+      };
+      byPlayer.set(playerId, row);
+    }
+    return row;
+  };
+
+  for (const week of weeks) {
+    const ranked = withRanks(week.rows);
+    for (const r of ranked) {
+      const row = ensure(r.playerId, r.initials);
+      row.totalWins += r.wins;
+      row.totalLosses += r.losses;
+      row.totalPushes += r.pushes;
+      if (r.pickCount > 0) row.weeksPlayed += 1;
+      // A week only has a winner once every game in it is final.
+      if (week.isComplete && r.rank === 1 && r.pickCount > 0) row.weeksWon += 1;
+    }
+  }
+
+  for (const row of byPlayer.values()) {
+    row.decided = row.totalWins + row.totalLosses;
+    row.winPct = row.decided ? row.totalWins / row.decided : 0;
+  }
+
+  return sortSeason([...byPlayer.values()]);
+}
+
+/** Season score first, then weeks won, then accuracy. */
+export function sortSeason(rows: SeasonRow[]): SeasonRow[] {
+  return [...rows].sort((a, b) => {
+    if (b.totalWins !== a.totalWins) return b.totalWins - a.totalWins;
+    if (b.weeksWon !== a.weeksWon) return b.weeksWon - a.weeksWon;
+    if (b.winPct !== a.winPct) return b.winPct - a.winPct;
+    return a.initials.localeCompare(b.initials);
+  });
+}
+
+export function withSeasonRanks(rows: SeasonRow[]): (SeasonRow & { rank: number })[] {
+  const key = (r: SeasonRow) => `${r.totalWins}|${r.weeksWon}|${r.winPct.toFixed(6)}`;
+  let lastKey: string | null = null;
+  let lastRank = 0;
+  return rows.map((row, i) => {
+    const k = key(row);
+    if (k !== lastKey) { lastRank = i + 1; lastKey = k; }
+    return { ...row, rank: lastRank };
+  });
+}
+
 /**
  * Competition ranking (1,2,2,4). Two players are only tied if every field the
  * sort actually used matches.

@@ -9,6 +9,8 @@ import { buildStandings, pickOutcome, sortStandings } from "@/lib/scoring";
 import { Badge, Card, CardHeader, EmptyState, LiveDot, OutcomeCell } from "@/components/ui";
 import { WeekNav } from "@/components/week-nav";
 import { SetupNeeded } from "@/components/setup-needed";
+import { LiveRefresh } from "@/components/live-refresh";
+import { refreshScoresIfStale } from "@/lib/sync";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +42,8 @@ export default async function BoardPage({ searchParams }: PageProps<"/board">) {
       </Card>
     );
   }
+
+  await refreshScoresIfStale(activeWeek.id);
 
   const bundle = await getWeekBundle(activeWeek.id);
   if (!bundle) return <SetupNeeded />;
@@ -77,7 +81,10 @@ export default async function BoardPage({ searchParams }: PageProps<"/board">) {
             {hiddenCount ? ` ${hiddenCount} still hidden.` : ""}
           </p>
         </div>
-        <WeekNav weeks={weekList} activeWeekId={activeWeek.id} basePath="/board" />
+        <div className="flex items-center gap-3">
+          <LiveRefresh active={bundle.games.some((g) => g.status === "in_progress")} />
+          <WeekNav weeks={weekList} activeWeekId={activeWeek.id} basePath="/board" />
+        </div>
       </div>
 
       <Card className="overflow-hidden">

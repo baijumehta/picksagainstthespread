@@ -18,11 +18,21 @@ export interface ManagedPlayer {
 
 const blank = { initials: "", fullName: "", email: "", phone: "", isAdmin: false };
 
+/**
+ * Importing a sheet gives us initials but no addresses, so those rows get a
+ * placeholder. Until it is replaced that person cannot be sent a sign-in link.
+ */
+export function isPlaceholderEmail(email: string): boolean {
+  return email.endsWith("@placeholder.invalid");
+}
+
 export function PlayersManager({ players }: { players: ManagedPlayer[] }) {
   const [msg, setMsg] = useState<{ ok: boolean; message: string } | null>(null);
   const [draft, setDraft] = useState(blank);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+
+  const needsEmail = players.filter((p) => p.isActive && isPlaceholderEmail(p.email));
 
   function create() {
     startTransition(async () => {
@@ -35,6 +45,15 @@ export function PlayersManager({ players }: { players: ManagedPlayer[] }) {
   return (
     <div className="space-y-5">
       {msg ? <Notice tone={msg.ok ? "ok" : "error"}>{msg.message}</Notice> : null}
+
+      {needsEmail.length ? (
+        <Notice tone="info">
+          <strong>{needsEmail.length}</strong>{" "}
+          {needsEmail.length === 1 ? "player has" : "players have"} no email yet, so they
+          cannot sign in: {needsEmail.map((p) => p.initials).join(", ")}. Edit each one to add
+          their address.
+        </Notice>
+      ) : null}
 
       <div className="rounded-xl border border-line bg-surface-2 p-4">
         <p className="mb-3 text-sm font-medium">Add a player</p>
@@ -118,7 +137,13 @@ export function PlayersManager({ players }: { players: ManagedPlayer[] }) {
                 >
                   <td className="px-3 py-2 font-semibold tracking-wide">{p.initials}</td>
                   <td className="px-3 py-2 text-muted">{p.fullName ?? "—"}</td>
-                  <td className="px-3 py-2 text-muted">{p.email}</td>
+                  <td className="px-3 py-2 text-muted">
+                    {isPlaceholderEmail(p.email) ? (
+                      <span className="text-push">no email yet</span>
+                    ) : (
+                      p.email
+                    )}
+                  </td>
                   <td className="px-3 py-2 text-muted">{p.phone ?? "—"}</td>
                   <td className="px-3 py-2">
                     {p.isAdmin ? <Badge tone="accent">commissioner</Badge> : <Badge>player</Badge>}

@@ -13,10 +13,12 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx scripts/seed.ts",
-    "db:demo": "tsx scripts/demo.ts"
+    "db:demo": "tsx scripts/demo.ts",
+    "import:week": "tsx scripts/import-week.ts"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.2",
+    "exceljs": "^4.4.0",
     "next": "16.3.5",
     "postgres": "^3.4.9",
     "react": "19.2.8",

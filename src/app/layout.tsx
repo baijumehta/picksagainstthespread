@@ -35,7 +35,8 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
               Picks Against the Spread
             </Link>
             <nav className="flex items-center gap-4 text-sm text-muted">
-              <Link href="/" className="hover:text-foreground">Standings</Link>
+              <Link href="/" className="hover:text-foreground">This week</Link>
+              <Link href="/season" className="hover:text-foreground">Season</Link>
               <Link href="/board" className="hover:text-foreground">Pick board</Link>
               {player ? (
                 <Link href="/picks" className="hover:text-foreground">My picks</Link>

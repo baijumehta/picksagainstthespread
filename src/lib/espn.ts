@@ -57,10 +57,12 @@ function parseEvents(json: any, league: League): EspnGame[] {
   return out.sort((a, b) => a.kickoffAt.getTime() - b.kickoffAt.getTime());
 }
 
-async function get(url: string): Promise<any> {
+/** Bounded so a slow upstream can never hang a page render. */
+async function get(url: string, timeoutMs = 8000): Promise<any> {
   const res = await fetch(url, {
     cache: "no-store",
     headers: { "user-agent": "picks-pool/1.0" },
+    signal: AbortSignal.timeout(timeoutMs),
   });
   if (!res.ok) throw new Error(`ESPN ${res.status} for ${url}`);
   return res.json();

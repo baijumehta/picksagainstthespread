@@ -9,6 +9,8 @@ import { buildStandings, gameCover, withRanks } from "@/lib/scoring";
 import { Badge, Card, CardHeader, EmptyState, LiveDot } from "@/components/ui";
 import { WeekNav } from "@/components/week-nav";
 import { SetupNeeded } from "@/components/setup-needed";
+import { LiveRefresh } from "@/components/live-refresh";
+import { refreshScoresIfStale } from "@/lib/sync";
 
 // Live scores change under us, so never serve this from cache.
 export const dynamic = "force-dynamic";
@@ -45,6 +47,10 @@ export default async function StandingsPage({
       </Card>
     );
   }
+
+  // Top up scores if they have gone stale. Throttled server-side, and it is
+  // what keeps the board live without relying on a cron.
+  await refreshScoresIfStale(activeWeek.id);
 
   const bundle = await getWeekBundle(activeWeek.id);
   if (!bundle) return <SetupNeeded />;
@@ -90,7 +96,10 @@ export default async function StandingsPage({
             ) : null}
           </p>
         </div>
-        <WeekNav weeks={weekList} activeWeekId={activeWeek.id} basePath="/" />
+        <div className="flex items-center gap-3">
+          <LiveRefresh active={liveGames.length > 0} />
+          <WeekNav weeks={weekList} activeWeekId={activeWeek.id} basePath="/" />
+        </div>
       </div>
 
       {liveGames.length ? <LiveStrip games={liveGames} /> : null}

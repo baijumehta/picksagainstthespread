@@ -16,8 +16,12 @@ Three faces:
 
 - **One point per correct pick** against the spread. A push (the game lands
   exactly on the number) is worth nothing to anybody and costs nothing.
+- **Two ways to win.** Take an individual week, or finish the year with the
+  highest total. They are tracked separately: `/` is the current week, `/season`
+  is the year to date with a `weeks won` column alongside the season score.
 - **Tiebreaker**: closest guess to the combined points in the nominated game —
-  normally Monday night.
+  normally Monday night. It settles a tied week; the season table breaks ties on
+  weeks won, then accuracy.
 - **Picks lock per game, at that game's own kickoff.** The Thursday nighter
   closes Thursday while the Sunday slate stays open. A pick stays hidden from
   the public board until its game locks.
@@ -101,10 +105,38 @@ installing Postgres.
    cell to cycle away → home → blank. Those are flagged with a dot so you can
    tell later what came from you.
 
+## Importing a finished sheet
+
+Weeks the pool already played by hand can be pulled straight in, so the season
+total includes them:
+
+```bash
+npm run import:week -- --file "NFL 2026-Week 1-Final.xlsx" --week 1
+```
+
+It reads the commissioner's own layout — away team, `HOME TEAM` in capitals, the
+spread on the underdog's row, an `X` in each player's column, tiebreaker guesses
+at the bottom. It pulls that week's games from ESPN, converts each line to the
+home-perspective number the app stores, and creates any players it has not seen.
+
+Add `--dry` to see what it would do first. The file must be `.xlsx` — if you
+have an old `.xls`, open it and Save As.
+
+Imported players get a placeholder email, so they cannot sign in until you put
+their real address in on the players screen. The admin page says who is missing one.
+
 ## Live scoring
 
-`/api/cron/scores` pulls scores from ESPN for every unfinished game in a
-published week. `vercel.json` schedules it every minute; any scheduler works:
+Scores look after themselves: rendering the standings or the board tops up any
+score older than 30 seconds, and the page re-renders every 30 seconds while a
+game is in progress. So the board stays live for whoever is watching, with no
+scheduler involved. The throttle is stored on the week row, so a crowd watching
+at once still only produces one ESPN call per 30 seconds.
+
+`vercel.json` also runs `/api/cron/scores` once a day as a catch-up. **Daily is
+the most Vercel's Hobby plan allows** — anything more frequent fails at deploy
+time with *"Hobby accounts are limited to daily cron jobs"*. On Pro you can
+change that schedule to `* * * * *`. Any external scheduler works too:
 
 ```bash
 curl "https://your-app/api/cron/scores?secret=$CRON_SECRET"

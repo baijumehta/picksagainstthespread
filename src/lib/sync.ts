@@ -154,6 +154,50 @@ export async function refreshScores(weekId: number): Promise<{ checked: number; 
   return { checked: open.length, changed };
 }
 
+/** True when a game has started but has not been marked final yet. */
+function isUnderway(g: { kickoffAt: Date; status: string }, now: Date): boolean {
+  return g.status !== "final" && now.getTime() >= g.kickoffAt.getTime();
+}
+
+/**
+ * Top up scores during a page render, at most once every `maxAgeMs`.
+ *
+ * This is what actually keeps the board live: a viewer loading the page pulls
+ * fresh scores, so the pool does not depend on a cron at all. Vercel's Hobby
+ * plan only allows daily crons, and a board nobody is looking at does not need
+ * updating anyway.
+ *
+ * The timestamp lives on the week row rather than in memory so the throttle
+ * holds across serverless instances.
+ */
+export async function refreshScoresIfStale(
+  weekId: number,
+  maxAgeMs = 30_000,
+): Promise<boolean> {
+  const week = await db.query.weeks.findFirst({ where: eq(weeks.id, weekId) });
+  if (!week) return false;
+
+  const now = new Date();
+  if (week.scoresSyncedAt && now.getTime() - week.scoresSyncedAt.getTime() < maxAgeMs) {
+    return false;
+  }
+
+  const weekGames = await db.query.games.findMany({ where: eq(games.weekId, weekId) });
+  if (!weekGames.some((g) => isUnderway(g, now))) return false;
+
+  // Claim the slot before the slow part, so concurrent renders do not all
+  // stampede ESPN with the same request.
+  await db.update(weeks).set({ scoresSyncedAt: now }).where(eq(weeks.id, weekId));
+
+  try {
+    await refreshScores(weekId);
+    return true;
+  } catch (err) {
+    console.error("[scores] refresh during render failed:", err);
+    return false;
+  }
+}
+
 /** Refresh every published week that still has an unfinished game. */
 export async function refreshAllOpenWeeks() {
   const openGameRows = await db

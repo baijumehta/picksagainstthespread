@@ -108,15 +108,19 @@ export default async function AdminPage() {
           <Card>
             <CardHeader
               title="Score polling"
-              subtitle="Live scores come from ESPN. Point a scheduler at this while games are on."
+              subtitle="Scores refresh by themselves while anyone has the board open."
             />
             <div className="space-y-2 px-5 py-4 text-sm">
               <code className="block break-all rounded-lg bg-surface-2 px-3 py-2 text-xs">
                 GET /api/cron/scores?secret=$CRON_SECRET
               </code>
               <p className="text-muted">
-                On Vercel the included <code>vercel.json</code> runs it every minute and sends the
-                secret automatically. You can also hit &quot;Refresh scores&quot; on any week.
+                You normally do not need this. A page load tops up stale scores itself
+                (at most once every 30 seconds), so the board stays live for whoever is
+                watching. The included <code>vercel.json</code> also runs a daily
+                catch-up, which is all Vercel&apos;s Hobby plan allows; on Pro you can
+                change that schedule to <code>* * * * *</code>. You can also hit
+                &quot;Refresh scores&quot; on any week.
               </p>
             </div>
           </Card>

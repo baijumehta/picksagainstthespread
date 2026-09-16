@@ -49,6 +49,11 @@ export const weeks = pgTable(
      */
     tiebreakerGameId: uuid("tiebreaker_game_id"),
     isPublished: boolean("is_published").notNull().default(false),
+    /**
+     * When scores were last pulled for this week. Lets a page render top up
+     * stale scores itself, throttled, instead of depending on a cron.
+     */
+    scoresSyncedAt: timestamp("scores_synced_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex("weeks_season_number_key").on(t.seasonId, t.weekNumber)],

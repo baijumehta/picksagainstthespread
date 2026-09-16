@@ -80,3 +80,41 @@ export async function getWeekBundle(weekId: number) {
 }
 
 export type WeekBundle = NonNullable<Awaited<ReturnType<typeof getWeekBundle>>>;
+
+/**
+ * Every published week's standings for a season, for the year-long table.
+ * One query per table rather than one per week, since the pool runs 18 weeks.
+ */
+export async function getSeasonWeeks(seasonId: number) {
+  const published = await db.query.weeks.findMany({
+    where: and(eq(weeks.seasonId, seasonId), eq(weeks.isPublished, true)),
+    orderBy: [asc(weeks.weekNumber)],
+  });
+  if (!published.length) return { weeks: [], games: [], picks: [], entries: [], players: [] };
+
+  const weekIds = published.map((w) => w.id);
+  const allGames = await db.query.games.findMany({
+    where: inArray(games.weekId, weekIds),
+    orderBy: [asc(games.kickoffAt)],
+  });
+  const gameIds = allGames.map((g) => g.id);
+
+  const allPicks = gameIds.length
+    ? await db.select().from(picks).where(inArray(picks.gameId, gameIds))
+    : [];
+  const allEntries = await db.query.weekEntries.findMany({
+    where: inArray(weekEntries.weekId, weekIds),
+  });
+  const activePlayers = await db.query.players.findMany({
+    where: eq(players.isActive, true),
+    orderBy: [asc(players.initials)],
+  });
+
+  return {
+    weeks: published,
+    games: allGames,
+    picks: allPicks,
+    entries: allEntries,
+    players: activePlayers,
+  };
+}
