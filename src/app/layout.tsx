@@ -48,9 +48,9 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
             <div className="ml-auto flex items-center gap-3 text-sm">
               {player ? (
                 <>
-                  <span className="text-muted">
+                  <Link href="/account" className="text-muted hover:text-foreground">
                     Signed in as <strong className="text-foreground">{player.initials}</strong>
-                  </span>
+                  </Link>
                   <form action={logoutAction}>
                     <button type="submit" className="text-muted underline-offset-2 hover:text-foreground hover:underline">
                       Sign out

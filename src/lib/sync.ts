@@ -180,29 +180,43 @@ function isUnderway(g: { kickoffAt: Date; status: string }, now: Date): boolean 
 }
 
 /**
- * Top up scores during a page render, at most once every `maxAgeMs`.
+ * Top up scores, at most once every `maxAgeMs`.
  *
- * This is what actually keeps the board live: a viewer loading the page pulls
- * fresh scores, so the pool does not depend on a cron at all. Vercel's Hobby
- * plan only allows daily crons, and a board nobody is looking at does not need
- * updating anyway.
+ * This is what actually keeps the board live: a page view pulls fresh scores,
+ * so the pool does not depend on a cron at all. Vercel's Hobby plan only
+ * allows daily crons, and a board nobody is looking at does not need updating.
+ *
+ * Call this from `after()` rather than awaiting it in a render -- ESPN can
+ * take seconds, and no viewer should sit through that. The refresh then lands
+ * before the page next re-renders.
  *
  * The timestamp lives on the week row rather than in memory so the throttle
  * holds across serverless instances.
+ *
+ * `known` lets a caller pass rows it has already loaded, saving two round
+ * trips to a database that may be a continent away.
  */
 export async function refreshScoresIfStale(
   weekId: number,
-  maxAgeMs = 30_000,
+  maxAgeMs = 120_000,
+  known?: { scoresSyncedAt: Date | null; games: { kickoffAt: Date; status: string }[] },
 ): Promise<boolean> {
-  const week = await db.query.weeks.findFirst({ where: eq(weeks.id, weekId) });
-  if (!week) return false;
-
   const now = new Date();
-  if (week.scoresSyncedAt && now.getTime() - week.scoresSyncedAt.getTime() < maxAgeMs) {
-    return false;
+
+  let scoresSyncedAt: Date | null;
+  let weekGames: { kickoffAt: Date; status: string }[];
+
+  if (known) {
+    scoresSyncedAt = known.scoresSyncedAt;
+    weekGames = known.games;
+  } else {
+    const week = await db.query.weeks.findFirst({ where: eq(weeks.id, weekId) });
+    if (!week) return false;
+    scoresSyncedAt = week.scoresSyncedAt;
+    weekGames = await db.query.games.findMany({ where: eq(games.weekId, weekId) });
   }
 
-  const weekGames = await db.query.games.findMany({ where: eq(games.weekId, weekId) });
+  if (scoresSyncedAt && now.getTime() - scoresSyncedAt.getTime() < maxAgeMs) return false;
   if (!weekGames.some((g) => isUnderway(g, now))) return false;
 
   // Claim the slot before the slow part, so concurrent renders do not all

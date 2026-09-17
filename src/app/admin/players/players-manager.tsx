@@ -5,6 +5,7 @@ import {
   createPlayerAction, setPlayerActiveAction, updatePlayerAction,
 } from "../../actions/admin";
 import { Badge, Button, Field, inputClass, Notice } from "@/components/ui";
+import { formatPhone } from "@/lib/phone";
 
 export interface ManagedPlayer {
   id: string;
@@ -144,7 +145,7 @@ export function PlayersManager({ players }: { players: ManagedPlayer[] }) {
                       p.email
                     )}
                   </td>
-                  <td className="px-3 py-2 text-muted">{p.phone ?? "—"}</td>
+                  <td className="px-3 py-2 text-muted">{formatPhone(p.phone) || "—"}</td>
                   <td className="px-3 py-2">
                     {p.isAdmin ? <Badge tone="accent">commissioner</Badge> : <Badge>player</Badge>}
                     {!p.isActive ? <span className="ml-1"><Badge>inactive</Badge></span> : null}
@@ -203,7 +204,7 @@ function EditRow({
     initials: player.initials,
     fullName: player.fullName ?? "",
     email: player.email,
-    phone: player.phone ?? "",
+    phone: formatPhone(player.phone),
     isAdmin: player.isAdmin,
   });
   const [pending, startTransition] = useTransition();

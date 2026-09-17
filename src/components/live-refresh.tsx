@@ -12,7 +12,7 @@ import { useRouter } from "next/navigation";
  */
 export function LiveRefresh({
   active,
-  intervalMs = 30_000,
+  intervalMs = 120_000,
 }: {
   active: boolean;
   intervalMs?: number;

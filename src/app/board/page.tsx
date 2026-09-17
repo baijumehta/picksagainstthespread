@@ -1,9 +1,6 @@
-import { eq } from "drizzle-orm";
-import { db } from "@/db";
-import { weeks as weeksTable } from "@/db/schema";
+import { after } from "next/server";
 import {
-  describeSpread, formatKickoffShort, getActiveWeek, getCurrentSeason,
-  getWeekBundle, isPickVisible, listWeeks,
+  describeSpread, formatKickoffShort, isPickVisible, loadWeekView,
 } from "@/lib/pool";
 import { buildStandings, pickOutcome, sortStandings } from "@/lib/scoring";
 import { Badge, Card, CardHeader, EmptyState, LiveDot, OutcomeCell } from "@/components/ui";
@@ -17,24 +14,22 @@ export const dynamic = "force-dynamic";
 export default async function BoardPage({ searchParams }: PageProps<"/board">) {
   const params = await searchParams;
 
-  let season, weekList, activeWeek;
+  const requested = Number(params.week);
+  let view: Awaited<ReturnType<typeof loadWeekView>> = null;
   let loadError: string | null = null;
   try {
-    season = await getCurrentSeason();
-    if (season) {
-      weekList = await listWeeks(season.id);
-      const requested = Number(params.week);
-      activeWeek = Number.isFinite(requested) && requested > 0
-        ? (await db.query.weeks.findFirst({ where: eq(weeksTable.id, requested) })) ?? null
-        : await getActiveWeek(season.id);
-    }
+    view = await loadWeekView(
+      Number.isFinite(requested) && requested > 0 ? requested : undefined,
+    );
   } catch (err) {
     loadError = err instanceof Error ? err.message : String(err);
   }
   if (loadError) return <SetupNeeded detail={loadError} />;
-  if (!season || !weekList) return <SetupNeeded />;
+  if (!view) return <SetupNeeded />;
 
-  if (!activeWeek || !activeWeek.isPublished) {
+  const { weekList, week: activeWeek } = view;
+
+  if (!activeWeek) {
     return (
       <Card>
         <CardHeader title="Pick board" />
@@ -43,11 +38,15 @@ export default async function BoardPage({ searchParams }: PageProps<"/board">) {
     );
   }
 
-  await refreshScoresIfStale(activeWeek.id);
+  // After the response, not before it -- see the standings page.
+  after(async () => {
+    await refreshScoresIfStale(activeWeek.id, 120_000, {
+      scoresSyncedAt: activeWeek.scoresSyncedAt,
+      games: view.games,
+    });
+  });
 
-  const bundle = await getWeekBundle(activeWeek.id);
-  if (!bundle) return <SetupNeeded />;
-
+  const bundle = view;
   const now = new Date();
   // Players run across the top in standings order so the board reads like a race.
   const ordered = sortStandings(

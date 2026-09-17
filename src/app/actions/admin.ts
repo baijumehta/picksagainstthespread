@@ -6,6 +6,7 @@ import { z } from "zod";
 import { db } from "@/db";
 import { games, picks, players, seasons, weekEntries, weeks } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth";
+import { normalizePhone } from "@/lib/phone";
 import { fetchCollegeDay, type EspnGame } from "@/lib/espn";
 import { addCollegeGame, importNflSlate, refreshScores, syncSpreads } from "@/lib/sync";
 
@@ -344,11 +345,14 @@ export async function createPlayerAction(input: unknown): Promise<Result> {
   });
   if (clash) return { ok: false, message: "Those initials or that email are already in use." };
 
+  const phone = normalizePhone(v.phone);
+  if (!phone.ok) return { ok: false, message: phone.message };
+
   await db.insert(players).values({
     initials: v.initials.toUpperCase(),
     fullName: v.fullName || null,
     email: v.email,
-    phone: v.phone || null,
+    phone: phone.e164,
     isAdmin: v.isAdmin ?? false,
   });
   bump();
@@ -362,13 +366,16 @@ export async function updatePlayerAction(playerId: string, input: unknown): Prom
     return { ok: false, message: parsed.error.issues[0]?.message ?? "Check the fields." };
   }
   const v = parsed.data;
+  const phone = normalizePhone(v.phone);
+  if (!phone.ok) return { ok: false, message: phone.message };
+
   await db
     .update(players)
     .set({
       initials: v.initials.toUpperCase(),
       fullName: v.fullName || null,
       email: v.email,
-      phone: v.phone || null,
+      phone: phone.e164,
       isAdmin: v.isAdmin ?? false,
     })
     .where(eq(players.id, playerId));

@@ -1,10 +1,6 @@
 import Link from "next/link";
-import { eq } from "drizzle-orm";
-import { db } from "@/db";
-import { weeks as weeksTable } from "@/db/schema";
-import {
-  formatKickoffShort, getActiveWeek, getCurrentSeason, getWeekBundle, listWeeks,
-} from "@/lib/pool";
+import { after } from "next/server";
+import { formatKickoffShort, loadWeekView } from "@/lib/pool";
 import { buildStandings, gameCover, withRanks } from "@/lib/scoring";
 import { Badge, Card, CardHeader, EmptyState, LiveDot } from "@/components/ui";
 import { WeekNav } from "@/components/week-nav";
@@ -20,24 +16,22 @@ export default async function StandingsPage({
 }: PageProps<"/">) {
   const params = await searchParams;
 
-  let season, weekList, activeWeek;
+  const requested = Number(params.week);
+  let view: Awaited<ReturnType<typeof loadWeekView>> = null;
   let loadError: string | null = null;
   try {
-    season = await getCurrentSeason();
-    if (season) {
-      weekList = await listWeeks(season.id);
-      const requested = Number(params.week);
-      activeWeek = Number.isFinite(requested) && requested > 0
-        ? (await db.query.weeks.findFirst({ where: eq(weeksTable.id, requested) })) ?? null
-        : await getActiveWeek(season.id);
-    }
+    view = await loadWeekView(
+      Number.isFinite(requested) && requested > 0 ? requested : undefined,
+    );
   } catch (err) {
     loadError = err instanceof Error ? err.message : String(err);
   }
   if (loadError) return <SetupNeeded detail={loadError} />;
-  if (!season || !weekList) return <SetupNeeded />;
+  if (!view) return <SetupNeeded />;
 
-  if (!activeWeek || !activeWeek.isPublished) {
+  const { season, weekList, week: activeWeek } = view;
+
+  if (!activeWeek) {
     return (
       <Card>
         <CardHeader title={`${season.year} season`} />
@@ -48,12 +42,16 @@ export default async function StandingsPage({
     );
   }
 
-  // Top up scores if they have gone stale. Throttled server-side, and it is
-  // what keeps the board live without relying on a cron.
-  await refreshScoresIfStale(activeWeek.id);
+  // Top up scores after the response has gone out. ESPN can take seconds and
+  // nobody should wait on it; the fresh numbers land before the next render.
+  after(async () => {
+    await refreshScoresIfStale(activeWeek.id, 120_000, {
+      scoresSyncedAt: activeWeek.scoresSyncedAt,
+      games: view.games,
+    });
+  });
 
-  const bundle = await getWeekBundle(activeWeek.id);
-  if (!bundle) return <SetupNeeded />;
+  const bundle = view;
 
   const rows = withRanks(
     buildStandings({

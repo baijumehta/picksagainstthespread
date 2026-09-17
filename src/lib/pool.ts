@@ -82,6 +82,89 @@ export async function getWeekBundle(weekId: number) {
 export type WeekBundle = NonNullable<Awaited<ReturnType<typeof getWeekBundle>>>;
 
 /**
+ * Everything the public standings and board pages need, in three sequential
+ * database steps instead of eight.
+ *
+ * Worth the consolidation because each round trip is expensive: the database
+ * may be in a different region from the function, and the old path asked for
+ * the same weeks and games three times over (once to pick the active week,
+ * once to decide whether scores were stale, once to build the bundle).
+ *
+ *   1. the season
+ *   2. every week and every game in it, in parallel
+ *   3. players, picks and tiebreaker entries for the chosen week, in parallel
+ *
+ * The active week is then chosen in memory rather than with another query.
+ */
+export async function loadWeekView(requestedWeekId?: number) {
+  const season = await getCurrentSeason();
+  if (!season) return null;
+
+  const [weekList, seasonGames] = await Promise.all([
+    db.query.weeks.findMany({
+      where: eq(weeks.seasonId, season.id),
+      orderBy: [asc(weeks.weekNumber)],
+    }),
+    db.query.games.findMany({
+      where: inArray(
+        games.weekId,
+        db.select({ id: weeks.id }).from(weeks).where(eq(weeks.seasonId, season.id)),
+      ),
+      orderBy: [asc(games.kickoffAt), asc(games.sortOrder)],
+    }),
+  ]);
+
+  const published = weekList.filter((w) => w.isPublished);
+  const week =
+    (requestedWeekId ? weekList.find((w) => w.id === requestedWeekId) : undefined) ??
+    pickActiveWeek(published, seasonGames) ??
+    null;
+
+  if (!week || !week.isPublished) {
+    return { season, weekList, week: null as null, games: [], players: [], picks: [], entries: [], tiebreakerGame: null };
+  }
+
+  const weekGames = seasonGames.filter((g) => g.weekId === week.id);
+  const gameIds = weekGames.map((g) => g.id);
+
+  const [activePlayers, weekPicks, entries] = await Promise.all([
+    db.query.players.findMany({
+      where: eq(players.isActive, true),
+      orderBy: [asc(players.initials)],
+    }),
+    gameIds.length
+      ? db.select().from(picks).where(inArray(picks.gameId, gameIds))
+      : Promise.resolve([] as (typeof picks.$inferSelect)[]),
+    db.query.weekEntries.findMany({ where: eq(weekEntries.weekId, week.id) }),
+  ]);
+
+  return {
+    season,
+    weekList,
+    week,
+    games: weekGames,
+    players: activePlayers,
+    picks: weekPicks,
+    entries,
+    tiebreakerGame: week.tiebreakerGameId
+      ? weekGames.find((g) => g.id === week.tiebreakerGameId) ?? null
+      : null,
+  };
+}
+
+/** The earliest published week that still has a game to play, else the last. */
+function pickActiveWeek<W extends { id: number }>(
+  published: W[],
+  allGames: { weekId: number; status: string }[],
+): W | null {
+  if (!published.length) return null;
+  const openWeekIds = new Set(
+    allGames.filter((g) => g.status !== "final").map((g) => g.weekId),
+  );
+  return published.find((w) => openWeekIds.has(w.id)) ?? published[published.length - 1];
+}
+
+/**
  * Every published week's standings for a season, for the year-long table.
  * One query per table rather than one per week, since the pool runs 18 weeks.
  */
