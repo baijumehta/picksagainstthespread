@@ -51,11 +51,19 @@ locally.
 | --- | --- | --- |
 | `DATABASE_URL` | yes | Any Postgres — see [Where to host the database](#where-to-host-the-database). Use the **pooled** connection string. |
 | `AUTH_SECRET` | yes | Signs sessions. `openssl rand -base64 32`. |
-| `APP_URL` | yes | Public base URL, used to build sign-in links. |
+| `APP_URL` | no | Only to override the production URL with a custom domain. Previews and localhost work it out themselves. |
 | `ODDS_API_KEY` | no | [The Odds API](https://the-odds-api.com) key for spreads. Without it, type the lines in by hand. |
 | `ODDS_BOOKMAKER` | no | Which book to take the line from. Defaults to `draftkings`. |
 | `CRON_SECRET` | yes | Shared secret protecting the score-polling endpoint. |
-| `RESEND_API_KEY` | no | Sends sign-in emails. Unset = links go to the console. |
+| `SMTP2GO_API_KEY` | no | Sends sign-in emails. Takes precedence over Resend. |
+| `RESEND_API_KEY` | no | Alternative mail provider. With neither, links go to the server console. |
+| `MAIL_FROM` | no | Sender address. Must be verified with whichever provider you use. |
+
+Check mail actually sends before anyone depends on it:
+
+```bash
+npm run mail:test -- --to you@example.com
+```
 
 ## Where to host the database
 
@@ -66,7 +74,11 @@ whole season is a few thousand rows.
 
 Set it up:
 
-1. Create a Neon project, pick the region closest to your Vercel region.
+1. Create a Neon project. **Put it in the same region as the Vercel functions**
+   — `vercel.json` pins them to `pdx1` to sit next to a `us-west-2` database.
+   Getting this wrong is expensive: a page makes several queries in sequence, so
+   a cross-country database added about 70ms to each one and roughly a second to
+   every page load.
 2. Copy the **pooled** connection string — the hostname contains `-pooler`.
    The app sets `prepare: false` because pooled Postgres runs PgBouncer in
    transaction mode, which rejects prepared statements.
@@ -132,11 +144,20 @@ their real address in on the players screen. The admin page says who is missing 
 
 ## Live scoring
 
-Scores look after themselves: rendering the standings or the board tops up any
-score older than 30 seconds, and the page re-renders every 30 seconds while a
-game is in progress. So the board stays live for whoever is watching, with no
-scheduler involved. The throttle is stored on the week row, so a crowd watching
-at once still only produces one ESPN call per 30 seconds.
+Scores look after themselves, with no scheduler involved. Viewing the standings
+or the board tops up any score older than 120 seconds, and the page re-renders
+on the same cadence while a game is in progress — pausing when the tab is
+hidden, and not running at all when nothing is being played.
+
+The ESPN call happens in [`after()`](https://nextjs.org/docs/app/api-reference/functions/after),
+once the response has already gone out, so no viewer ever waits on it; the fresh
+numbers land before the next render. The throttle is stored on the week row
+rather than in memory, so a crowd watching at once still produces only one ESPN
+call per 120 seconds between them.
+
+**Do not add headers to the ESPN requests.** From a datacenter IP, ESPN 403s a
+request carrying a custom `user-agent`, and 403s harder for a spoofed browser
+one. Sending nothing is served normally. See the comment in `src/lib/espn.ts`.
 
 `vercel.json` also runs `/api/cron/scores` once a day as a catch-up. **Daily is
 the most Vercel's Hobby plan allows** — anything more frequent fails at deploy

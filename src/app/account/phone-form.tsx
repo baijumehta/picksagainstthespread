@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { saveMyPhoneAction } from "../actions/account";
+import { formatPhone } from "@/lib/phone";
 import { Button, Field, inputClass, Notice } from "@/components/ui";
 
 export function PhoneForm({ initial }: { initial: string }) {
@@ -18,8 +19,10 @@ export function PhoneForm({ initial }: { initial: string }) {
       const res = await saveMyPhoneAction(value);
       setMsg({ ok: res.ok, message: res.message });
       if (res.ok) {
-        setSaved(res.phone ?? "");
-        setValue(res.phone ?? "");
+        // Show it the way a reload would, not as raw E.164.
+        const display = formatPhone(res.phone);
+        setSaved(display);
+        setValue(display);
       }
     });
   }
