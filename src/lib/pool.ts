@@ -2,6 +2,13 @@ import "server-only";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { games, picks, players, seasons, weekEntries, weeks } from "@/db/schema";
+import { refreshScoresIfStale } from "./sync";
+
+/**
+ * Past this age, a page view waits for fresh scores instead of deferring the
+ * fetch. Under it, after() handles the top-up and nobody waits.
+ */
+const BLOCKING_STALE_MS = 5 * 60_000;
 
 // Lock and display rules live in ./format so they stay unit-testable.
 export {
@@ -124,7 +131,37 @@ export async function loadWeekView(requestedWeekId?: number) {
     return { season, weekList, week: null as null, games: [], players: [], picks: [], entries: [], tiebreakerGame: null };
   }
 
-  const weekGames = seasonGames.filter((g) => g.weekId === week.id);
+  let weekGames = seasonGames.filter((g) => g.weekId === week.id);
+
+  /*
+   * Normally the score top-up runs in after(), so nobody waits on ESPN. But
+   * the first view after a quiet spell would then show whatever was true when
+   * the last person looked, which during a game is simply wrong -- and looks
+   * broken. So if games are underway and the scores are properly old, wait for
+   * them. That costs a few hundred milliseconds on a cold open and nothing at
+   * all while people are actually watching.
+   */
+  const now = new Date();
+  const underway = weekGames.some(
+    (g) => g.status !== "final" && now.getTime() >= g.kickoffAt.getTime(),
+  );
+  const badlyStale =
+    !week.scoresSyncedAt ||
+    now.getTime() - week.scoresSyncedAt.getTime() > BLOCKING_STALE_MS;
+
+  if (underway && badlyStale) {
+    const refreshed = await refreshScoresIfStale(week.id, BLOCKING_STALE_MS, {
+      scoresSyncedAt: week.scoresSyncedAt,
+      games: weekGames,
+    });
+    if (refreshed) {
+      weekGames = await db.query.games.findMany({
+        where: eq(games.weekId, week.id),
+        orderBy: [asc(games.kickoffAt), asc(games.sortOrder)],
+      });
+    }
+  }
+
   const gameIds = weekGames.map((g) => g.id);
 
   const [activePlayers, weekPicks, entries] = await Promise.all([
