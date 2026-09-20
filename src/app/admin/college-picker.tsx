@@ -5,6 +5,7 @@ import {
   addCollegeGameAction, searchCollegeGamesAction, type CollegeCandidate,
 } from "../actions/admin";
 import { Button, Notice } from "@/components/ui";
+import { POOL_TIMEZONE } from "@/lib/format";
 
 /**
  * Bye weeks leave the card short, so the commissioner pads it with college
@@ -46,15 +47,16 @@ export function CollegePicker({
     });
   }
 
-  // "Late" = 7pm ET or later, which is the window he actually uses.
+  // "Late" = 4pm Pacific or later, i.e. the 7pm Eastern window and after,
+  // which is the slot the bye-week fill-ins come from.
   const shown = (candidates ?? []).filter((c) => {
     if (!onlyLate) return true;
     const hour = Number(
       new Intl.DateTimeFormat("en-US", {
-        timeZone: "America/New_York", hour: "numeric", hour12: false,
+        timeZone: POOL_TIMEZONE, hour: "numeric", hour12: false,
       }).format(new Date(c.kickoffIso)),
     );
-    return hour >= 19 || hour <= 3;
+    return hour >= 16 || hour <= 0;
   });
 
   return (
@@ -79,7 +81,7 @@ export function CollegePicker({
             onChange={(e) => setOnlyLate(e.target.checked)}
             className="h-4 w-4 accent-[var(--accent)]"
           />
-          Late kickoffs only (7pm ET+)
+          Late kickoffs only (4pm PT+)
         </label>
       </div>
 
@@ -98,7 +100,7 @@ export function CollegePicker({
                   <p className="truncate text-sm font-medium">{c.label}</p>
                   <p className="text-xs text-muted">
                     {new Intl.DateTimeFormat("en-US", {
-                      timeZone: "America/New_York",
+                      timeZone: POOL_TIMEZONE,
                       weekday: "short", hour: "numeric", minute: "2-digit", timeZoneName: "short",
                     }).format(new Date(c.kickoffIso))}
                   </p>

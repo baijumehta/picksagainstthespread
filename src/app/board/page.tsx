@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { after } from "next/server";
 import { describeSpread, formatClock, formatKickoffShort } from "@/lib/format";
 import { isPickVisible, loadWeekView } from "@/lib/pool";
@@ -7,6 +8,8 @@ import { WeekNav } from "@/components/week-nav";
 import { SetupNeeded } from "@/components/setup-needed";
 import { getCurrentPlayer } from "@/lib/auth";
 import { LiveRefresh } from "@/components/live-refresh";
+import { BoardViewSwitch } from "@/components/board-view-switch";
+import { SinglePlayerBoard } from "@/components/single-player-board";
 import { refreshScoresIfStale } from "@/lib/sync";
 
 export const dynamic = "force-dynamic";
@@ -70,16 +73,28 @@ export default async function BoardPage({ searchParams }: PageProps<"/board">) {
 
   const hiddenCount = bundle.games.filter((g) => !isPickVisible(g, now)).length;
 
+  // "Just me" / one-player view: the same week read top to bottom instead of
+  // across a 28-column grid.
+  const onlyParam = typeof params.only === "string" ? params.only.toUpperCase() : null;
+  const onlyPlayer = onlyParam
+    ? bundle.players.find((p) => p.initials.toUpperCase() === onlyParam) ?? null
+    : null;
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">
+          <Link href="/" className="text-sm text-muted hover:text-foreground">
+            ← Standings
+          </Link>
+          <h1 className="mt-0.5 text-xl font-semibold tracking-tight">
             {activeWeek.label} pick board
           </h1>
           <p className="mt-0.5 text-sm text-muted">
-            Each pick appears once its game kicks off.
-            {hiddenCount ? ` ${hiddenCount} still hidden.` : ""}
+            {onlyPlayer
+              ? `${onlyPlayer.initials}'s card.`
+              : "Each pick appears once its game kicks off."}
+            {!onlyPlayer && hiddenCount ? ` ${hiddenCount} still hidden.` : ""}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -91,6 +106,41 @@ export default async function BoardPage({ searchParams }: PageProps<"/board">) {
         </div>
       </div>
 
+      <BoardViewSwitch
+        weekId={activeWeek.id}
+        players={ordered.map((r) => ({ initials: r.initials }))}
+        selected={onlyPlayer?.initials ?? null}
+        meInitials={me?.initials ?? null}
+      />
+
+      {onlyPlayer ? (
+        <SinglePlayerBoard
+          initials={onlyPlayer.initials}
+          isSelf={onlyPlayer.id === me?.id}
+          now={now}
+          games={bundle.games.map((g) => {
+            const pick = bundle.picks.find(
+              (p) => p.playerId === onlyPlayer.id && p.gameId === g.id,
+            );
+            return {
+              id: g.id,
+              league: g.league,
+              homeTeam: g.homeTeam,
+              homeAbbr: g.homeAbbr,
+              awayTeam: g.awayTeam,
+              awayAbbr: g.awayAbbr,
+              kickoffAt: g.kickoffAt,
+              spread: g.spread,
+              status: g.status,
+              statusDetail: g.statusDetail,
+              homeScore: g.homeScore,
+              awayScore: g.awayScore,
+              selection: pick?.selection ?? null,
+              isAutoPick: pick?.isAutoPick ?? false,
+            };
+          })}
+        />
+      ) : (
       <Card className="overflow-hidden">
         {bundle.games.length === 0 ? (
           <EmptyState title="No games on this week yet." />
@@ -161,7 +211,11 @@ export default async function BoardPage({ searchParams }: PageProps<"/board">) {
 
                       {ordered.map((row) => {
                         const selection = pickMap.get(`${row.playerId}:${game.id}`) ?? null;
-                        if (!visible) {
+                        // You always see your own picks. Hiding them until
+                        // kickoff protects picks from being copied, which is
+                        // no reason to hide them from the person who made them.
+                        const isMine = row.playerId === me?.id;
+                        if (!visible && !isMine) {
                           return (
                             <td key={row.playerId} className={"px-1 py-1.5 text-center " + (row.playerId === me?.id ? "bg-accent/10" : "")}>
                               <span
@@ -235,12 +289,13 @@ export default async function BoardPage({ searchParams }: PageProps<"/board">) {
           </div>
         )}
       </Card>
+      )}
 
       <div className="flex flex-wrap items-center gap-3 text-xs text-muted">
         <Legend className="bg-win-bg text-win" label="Covered ✓" />
         <Legend className="bg-loss-bg text-loss" label="Missed ✕" />
         <Legend className="bg-push-bg text-push" label="Push =" />
-        <span>• = pick locked in, hidden until kickoff</span>
+        {onlyPlayer ? null : <span>• = pick locked in, hidden until kickoff</span>}
         <span>– = no pick</span>
       </div>
     </div>

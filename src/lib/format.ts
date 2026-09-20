@@ -1,4 +1,15 @@
 /**
+ * The pool is entirely in Pacific time, so every time shown to a person is
+ * rendered in it. Formatting on the server keeps it identical to what the
+ * client renders.
+ *
+ * Note this is a DISPLAY choice only. ESPN buckets its scoreboard by US
+ * Eastern date, so toEspnDate in ./espn must stay Eastern regardless.
+ */
+export const POOL_TIMEZONE = "America/Los_Angeles";
+export const POOL_TZ_LABEL = "PT";
+
+/**
  * Pure lock and display rules. Kept free of server-only imports so they can be
  * unit tested and used from either side of the wire.
  */
@@ -38,21 +49,21 @@ export function describeSpread(
 
 export function formatKickoff(d: Date): string {
   return new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/New_York",
+    timeZone: POOL_TIMEZONE,
     weekday: "short", month: "numeric", day: "numeric",
     hour: "numeric", minute: "2-digit", timeZoneName: "short",
   }).format(d);
 }
 
 /**
- * "1:42:07 PM ET" — formatted on the server so it cannot disagree with what
- * the client renders. Everything else in the app is shown in Eastern too.
+ * "10:42:07 AM PT" — formatted on the server so it cannot disagree with what
+ * the client renders.
  */
 export function formatClock(d: Date): string {
   return new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/New_York",
+    timeZone: POOL_TIMEZONE,
     hour: "numeric", minute: "2-digit", second: "2-digit",
-  }).format(d) + " ET";
+  }).format(d) + ` ${POOL_TZ_LABEL}`;
 }
 
 /** Each side's own number: "-3.5" for the favourite, "+3.5" for the dog. */
@@ -67,7 +78,7 @@ export function sideLine(spread: string | number | null, side: "home" | "away"):
 
 export function formatKickoffShort(d: Date): string {
   return new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/New_York",
+    timeZone: POOL_TIMEZONE,
     weekday: "short", hour: "numeric", minute: "2-digit",
   }).format(d);
 }

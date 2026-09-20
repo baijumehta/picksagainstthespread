@@ -133,7 +133,14 @@ export async function fetchScoresForDates(
   return { games, errors };
 }
 
-/** ESPN wants YYYYMMDD in US Eastern, which is how its slate is bucketed. */
+/**
+ * ESPN wants YYYYMMDD in US Eastern, which is how its slate is bucketed.
+ *
+ * This stays Eastern even though the pool shows every time in Pacific. It is
+ * not a display choice: ask for the wrong day and the scoreboard comes back
+ * without the games, which reads as a silent failure to update scores. The
+ * display timezone lives in ./format as POOL_TIMEZONE.
+ */
 export function toEspnDate(d: Date): string {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/New_York",
