@@ -8,6 +8,7 @@ import { WeekNav } from "@/components/week-nav";
 import { SetupNeeded } from "@/components/setup-needed";
 import { LiveRefresh } from "@/components/live-refresh";
 import { refreshScoresIfStale } from "@/lib/sync";
+import { getCurrentPlayer } from "@/lib/auth";
 
 // Live scores change under us, so never serve this from cache.
 export const dynamic = "force-dynamic";
@@ -53,6 +54,8 @@ export default async function StandingsPage({
   });
 
   const bundle = view;
+  // Who is looking, so their own row can be picked out of 28.
+  const me = await getCurrentPlayer().catch(() => null);
 
   const rows = withRanks(
     buildStandings({
@@ -146,11 +149,19 @@ export default async function StandingsPage({
                 {rows.map((row) => (
                   <tr
                     key={row.playerId}
-                    className="border-b border-line last:border-0 hover:bg-surface-2"
+                    className={
+                      "border-b border-line last:border-0 hover:bg-surface-2 " +
+                      (row.playerId === me?.id ? "bg-accent/10" : "")
+                    }
                   >
                     <td className="px-4 py-2 tabular-nums text-muted">{row.rank}</td>
                     <td className="px-2 py-2 font-semibold tracking-wide">
                       {row.initials}
+                      {row.playerId === me?.id ? (
+                        <span className="ml-1.5 rounded bg-accent px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent-fg">
+                          you
+                        </span>
+                      ) : null}
                       {row.pickCount < bundle.games.length ? (
                         <span
                           className="ml-2 text-xs font-normal text-muted"

@@ -5,6 +5,7 @@ import {
 } from "@/lib/scoring";
 import { Badge, Card, CardHeader, EmptyState } from "@/components/ui";
 import { SetupNeeded } from "@/components/setup-needed";
+import { getCurrentPlayer } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -56,6 +57,8 @@ export default async function SeasonPage() {
 
   const rows = withSeasonRanks(buildSeasonStandings(weekInputs));
   const completeWeeks = weekInputs.filter((w) => w.isComplete).length;
+  // Who is looking, so their own row stands out of a 28-line table.
+  const me = await getCurrentPlayer().catch(() => null);
 
   // Who took each finished week, for the strip under the table.
   const weekWinners = weekInputs
@@ -114,10 +117,20 @@ export default async function SeasonPage() {
               {rows.map((row) => (
                 <tr
                   key={row.playerId}
-                  className="border-b border-line last:border-0 hover:bg-surface-2"
+                  className={
+                    "border-b border-line last:border-0 hover:bg-surface-2 " +
+                    (row.playerId === me?.id ? "bg-accent/10" : "")
+                  }
                 >
                   <td className="px-4 py-2 tabular-nums text-muted">{row.rank}</td>
-                  <td className="px-2 py-2 font-semibold tracking-wide">{row.initials}</td>
+                  <td className="px-2 py-2 font-semibold tracking-wide">
+                    {row.initials}
+                    {row.playerId === me?.id ? (
+                      <span className="ml-1.5 rounded bg-accent px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent-fg">
+                        you
+                      </span>
+                    ) : null}
+                  </td>
                   <td className="px-2 py-2 text-right text-base font-semibold tabular-nums">
                     {row.totalWins}
                   </td>

@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { and, eq, gt, isNull } from "drizzle-orm";
@@ -93,8 +94,13 @@ export async function endSession(): Promise<void> {
   jar.delete(SESSION_COOKIE);
 }
 
-/** The signed-in player, or null. Safe to call from any server component. */
-export async function getCurrentPlayer(): Promise<Player | null> {
+/**
+ * The signed-in player, or null. Safe to call from any server component.
+ *
+ * Wrapped in React's cache so the layout and the page it renders share one
+ * lookup per request instead of querying twice.
+ */
+export const getCurrentPlayer = cache(async (): Promise<Player | null> => {
   const jar = await cookies();
   const token = jar.get(SESSION_COOKIE)?.value;
   if (!token) return null;
@@ -109,7 +115,7 @@ export async function getCurrentPlayer(): Promise<Player | null> {
     .limit(1);
   const player = row?.player;
   return player && player.isActive ? player : null;
-}
+});
 
 export async function requirePlayer(): Promise<Player> {
   const player = await getCurrentPlayer();

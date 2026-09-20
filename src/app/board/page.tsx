@@ -5,6 +5,7 @@ import { buildStandings, pickOutcome, sortStandings } from "@/lib/scoring";
 import { Badge, Card, CardHeader, EmptyState, LiveDot, OutcomeCell } from "@/components/ui";
 import { WeekNav } from "@/components/week-nav";
 import { SetupNeeded } from "@/components/setup-needed";
+import { getCurrentPlayer } from "@/lib/auth";
 import { LiveRefresh } from "@/components/live-refresh";
 import { refreshScoresIfStale } from "@/lib/sync";
 
@@ -47,6 +48,8 @@ export default async function BoardPage({ searchParams }: PageProps<"/board">) {
 
   const bundle = view;
   const now = new Date();
+  // Who is looking, so their column can be picked out of 28.
+  const me = await getCurrentPlayer().catch(() => null);
   // Players run across the top in standings order so the board reads like a race.
   const ordered = sortStandings(
     buildStandings({
@@ -106,7 +109,10 @@ export default async function BoardPage({ searchParams }: PageProps<"/board">) {
                     <th
                       key={row.playerId}
                       scope="col"
-                      className="px-1.5 py-2 text-center text-xs font-semibold tracking-wide"
+                      className={
+                        "px-1.5 py-2 text-center text-xs font-semibold tracking-wide " +
+                        (row.playerId === me?.id ? "bg-accent/15 text-accent" : "")
+                      }
                     >
                       {row.initials}
                     </th>
@@ -157,7 +163,7 @@ export default async function BoardPage({ searchParams }: PageProps<"/board">) {
                         const selection = pickMap.get(`${row.playerId}:${game.id}`) ?? null;
                         if (!visible) {
                           return (
-                            <td key={row.playerId} className="px-1 py-1.5 text-center">
+                            <td key={row.playerId} className={"px-1 py-1.5 text-center " + (row.playerId === me?.id ? "bg-accent/10" : "")}>
                               <span
                                 className="text-muted"
                                 title={selection ? "Pick is in, hidden until kickoff" : "No pick yet"}
@@ -173,7 +179,7 @@ export default async function BoardPage({ searchParams }: PageProps<"/board">) {
                             : game.awayAbbr ?? "AWAY"
                           : "–";
                         return (
-                          <td key={row.playerId} className="px-1 py-1.5">
+                          <td key={row.playerId} className={"px-1 py-1.5 " + (row.playerId === me?.id ? "bg-accent/10" : "")}>
                             <OutcomeCell outcome={pickOutcome(game, selection)} label={label} />
                           </td>
                         );
@@ -218,7 +224,7 @@ export default async function BoardPage({ searchParams }: PageProps<"/board">) {
                     Record
                   </th>
                   {ordered.map((row) => (
-                    <td key={row.playerId} className="px-1 py-2 text-center tabular-nums">
+                    <td key={row.playerId} className={"px-1 py-2 text-center tabular-nums " + (row.playerId === me?.id ? "bg-accent/10" : "")}>
                       {row.wins}–{row.losses}
                       {row.pushes ? `–${row.pushes}` : ""}
                     </td>
