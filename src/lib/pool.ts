@@ -3,6 +3,7 @@ import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { games, picks, players, seasons, weekEntries, weeks } from "@/db/schema";
 import { refreshScoresIfStale } from "./sync";
+import { applyAutoPicks } from "./autopick-apply";
 
 /**
  * Past this age, a page view waits for fresh scores instead of deferring the
@@ -175,18 +176,46 @@ export async function loadWeekView(requestedWeekId?: number) {
     db.query.weekEntries.findMany({ where: eq(weekEntries.weekId, week.id) }),
   ]);
 
+  const tiebreakerGame = week.tiebreakerGameId
+    ? weekGames.find((g) => g.id === week.tiebreakerGameId) ?? null
+    : null;
+
+  // Fill in for anyone who opted into auto-picks and missed a kickoff. Done
+  // here because every public view passes through, and the result is the same
+  // whenever it runs: the favourite is fixed once the line is locked, so a
+  // pick written late is identical to one written at kickoff.
+  const filled = await applyAutoPicks({
+    players: activePlayers,
+    games: weekGames,
+    existingPicks: weekPicks,
+    existingEntries: entries,
+    tiebreakerGame,
+    weekId: week.id,
+  });
+
   return {
     season,
     weekList,
     week,
     games: weekGames,
     players: activePlayers,
-    picks: weekPicks,
-    entries,
-    tiebreakerGame: week.tiebreakerGameId
-      ? weekGames.find((g) => g.id === week.tiebreakerGameId) ?? null
-      : null,
+    picks: [...weekPicks, ...filled.picks],
+    entries: filled.entries.length ? mergeEntries(entries, filled.entries) : entries,
+    tiebreakerGame,
   };
+}
+
+function mergeEntries<E extends { playerId: string; tiebreakerTotal: number | null }>(
+  existing: E[],
+  added: { playerId: string; tiebreakerTotal: number }[],
+): E[] {
+  const byPlayer = new Map(existing.map((e) => [e.playerId, e]));
+  for (const a of added) {
+    const found = byPlayer.get(a.playerId);
+    if (found) byPlayer.set(a.playerId, { ...found, tiebreakerTotal: a.tiebreakerTotal });
+    else byPlayer.set(a.playerId, { ...a } as unknown as E);
+  }
+  return [...byPlayer.values()];
 }
 
 /** The earliest published week that still has a game to play, else the last. */

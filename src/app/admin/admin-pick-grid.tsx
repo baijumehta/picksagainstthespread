@@ -30,6 +30,7 @@ export function AdminPickGrid({
   players,
   picks,
   adminEdited,
+  autoPicked,
   tiebreakers,
   tiebreakerLabel,
 }: {
@@ -38,6 +39,7 @@ export function AdminPickGrid({
   players: GridPlayer[];
   picks: Record<string, "home" | "away">;
   adminEdited: Record<string, boolean>;
+  autoPicked: Record<string, boolean>;
   tiebreakers: Record<string, number | null>;
   tiebreakerLabel: string | null;
 }) {
@@ -130,6 +132,8 @@ export function AdminPickGrid({
                         {label}
                         {edited[key] && sel ? (
                           <span className="ml-0.5 text-accent" aria-label="entered by admin">•</span>
+                        ) : autoPicked[key] && sel ? (
+                          <span className="ml-0.5 text-push" aria-label="auto-filled favourite">a</span>
                         ) : null}
                       </button>
                     </td>
@@ -167,6 +171,7 @@ export function AdminPickGrid({
       <div className="flex flex-wrap gap-3 text-xs text-muted">
         <span><Badge>–</Badge> no pick</span>
         <span className="text-accent">• entered by you</span>
+        <span className="text-push">a auto-filled favourite</span>
       </div>
     </div>
   );

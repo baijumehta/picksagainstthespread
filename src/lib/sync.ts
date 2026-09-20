@@ -98,9 +98,28 @@ export async function syncSpreads(weekId: number): Promise<SpreadSyncResult> {
   const hooked: string[] = [];
 
   for (const game of weekGames) {
-    if (game.spreadIsManual) { skippedManual++; continue; }
     const line = findLineFor(game, linesByLeague.get(game.league) ?? []);
-    if (!line) { unmatched.push(`${game.awayTeam} at ${game.homeTeam}`); continue; }
+    if (!line) {
+      if (!game.spreadIsManual) unmatched.push(`${game.awayTeam} at ${game.homeTeam}`);
+      continue;
+    }
+
+    /*
+     * A hand-set line is the pool's number and the sync must not touch it --
+     * but that only ever meant the spread. The over/under is a separate thing,
+     * used solely as the auto tiebreaker guess, and the commissioner's sheet
+     * does not carry one. So take the book's total even here.
+     */
+    if (game.spreadIsManual) {
+      skippedManual++;
+      const total = line.overUnder;
+      if (total !== null && game.overUnder !== total.toFixed(1)) {
+        await db.update(games)
+          .set({ overUnder: total.toFixed(1), updatedAt: new Date() })
+          .where(eq(games.id, game.id));
+      }
+      continue;
+    }
 
     const spread = hookWholeNumber(line.homeSpread);
     if (spread !== line.homeSpread) {
@@ -108,7 +127,13 @@ export async function syncSpreads(weekId: number): Promise<SpreadSyncResult> {
     }
 
     await db.update(games)
-      .set({ spread: spread.toFixed(1), updatedAt: new Date() })
+      .set({
+        spread: spread.toFixed(1),
+        // Not hooked: the total is only ever a tiebreaker guess, never a
+        // thing that has to come out one side or the other.
+        overUnder: line.overUnder === null ? null : line.overUnder.toFixed(1),
+        updatedAt: new Date(),
+      })
       .where(eq(games.id, game.id));
     updated++;
   }

@@ -54,7 +54,11 @@ export default async function PicksPage({ searchParams }: PageProps<"/picks">) {
   const now = new Date();
 
   const initialSelections: Record<string, "home" | "away"> = {};
-  for (const p of mine) initialSelections[p.gameId] = p.selection;
+  const autoPicked = new Set<string>();
+  for (const p of mine) {
+    initialSelections[p.gameId] = p.selection;
+    if (p.isAutoPick) autoPicked.add(p.gameId);
+  }
 
   const formGames: PickFormGame[] = bundle.games.map((g) => ({
     id: g.id,
@@ -71,6 +75,7 @@ export default async function PicksPage({ searchParams }: PageProps<"/picks">) {
     awayScore: g.awayScore,
     homeScore: g.homeScore,
     isTiebreaker: g.id === activeWeek.tiebreakerGameId,
+    isAutoPick: autoPicked.has(g.id),
   }));
 
   const tb = bundle.tiebreakerGame;

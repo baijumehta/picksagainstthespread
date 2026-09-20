@@ -17,6 +17,12 @@ export const players = pgTable(
     /** Phase two: SMS nudges for missing picks. */
     phone: text("phone"),
     isAdmin: boolean("is_admin").notNull().default(false),
+    /**
+     * When this player asked for missed picks to be filled with the favourite.
+     * A timestamp rather than a flag so opting in never rewrites a game that
+     * had already kicked off -- only games locking after this moment qualify.
+     */
+    autoPickOptedInAt: timestamp("auto_pick_opted_in_at", { withTimezone: true }),
     isActive: boolean("is_active").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -88,6 +94,8 @@ export const games = pgTable(
     spread: numeric("spread", { precision: 4, scale: 1 }),
     /** Set when the cousin overrides the book. Blocks the sync from clobbering it. */
     spreadIsManual: boolean("spread_is_manual").notNull().default(false),
+    /** Betting total. Used as the tiebreaker guess for an auto-filled entry. */
+    overUnder: numeric("over_under", { precision: 4, scale: 1 }),
 
     homeScore: integer("home_score"),
     awayScore: integer("away_score"),
@@ -114,6 +122,8 @@ export const picks = pgTable(
     selection: text("selection").$type<"home" | "away">().notNull(),
     /** True when the cousin fixed it up on someone's behalf. Shown in the audit column. */
     editedByAdmin: boolean("edited_by_admin").notNull().default(false),
+    /** True when nobody chose this -- the favourite was filled in at kickoff. */
+    isAutoPick: boolean("is_auto_pick").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

@@ -57,9 +57,11 @@ export default async function AdminWeekPage({ params }: PageProps<"/admin/week/[
 
   const pickMap: Record<string, "home" | "away"> = {};
   const editedMap: Record<string, boolean> = {};
+  const autoMap: Record<string, boolean> = {};
   for (const p of picks) {
     pickMap[`${p.playerId}:${p.gameId}`] = p.selection;
     if (p.editedByAdmin) editedMap[`${p.playerId}:${p.gameId}`] = true;
+    if (p.isAutoPick) autoMap[`${p.playerId}:${p.gameId}`] = true;
   }
 
   const gridGames: GridGame[] = games.map((g) => ({
@@ -172,6 +174,7 @@ export default async function AdminWeekPage({ params }: PageProps<"/admin/week/[
               players={gridPlayers}
               picks={pickMap}
               adminEdited={editedMap}
+              autoPicked={autoMap}
               tiebreakers={tiebreakers}
               tiebreakerLabel={tb ? `${tb.awayAbbr ?? tb.awayTeam} @ ${tb.homeAbbr ?? tb.homeTeam}` : null}
             />

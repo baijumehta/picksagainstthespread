@@ -4,6 +4,7 @@ import { formatPhone } from "@/lib/phone";
 import { Card, CardHeader } from "@/components/ui";
 import { SetupNeeded } from "@/components/setup-needed";
 import { PhoneForm } from "./phone-form";
+import { AutoPickToggle } from "./autopick-toggle";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,16 @@ export default async function AccountPage() {
   return (
     <div className="mx-auto max-w-md space-y-5">
       <h1 className="text-xl font-semibold tracking-tight">Your details</h1>
+
+      <Card>
+        <CardHeader
+          title="Never miss a week"
+          subtitle="The commissioner's fallback, applied automatically."
+        />
+        <div className="px-5 py-4">
+          <AutoPickToggle initial={me.autoPickOptedInAt !== null} />
+        </div>
+      </Card>
 
       <Card>
         <CardHeader

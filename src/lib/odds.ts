@@ -13,6 +13,8 @@ export interface OddsLine {
   commenceTime: Date;
   /** Home-perspective points. -3.5 => home favoured by 3.5. */
   homeSpread: number;
+  /** Betting total, when the book posts one. Feeds the auto tiebreaker. */
+  overUnder: number | null;
   bookmaker: string;
 }
 
@@ -57,7 +59,7 @@ export async function fetchSpreads(league: League): Promise<OddsLine[]> {
 
   const url =
     `${BASE}/${SPORT_KEY[league]}/odds?apiKey=${encodeURIComponent(apiKey)}` +
-    `&regions=us&markets=spreads&oddsFormat=american`;
+    `&regions=us&markets=spreads,totals&oddsFormat=american`;
 
   const res = await fetch(url, { cache: "no-store" });
   if (res.status === 401) throw new Error("The Odds API rejected the key (401).");
@@ -77,11 +79,17 @@ export async function fetchSpreads(league: League): Promise<OddsLine[]> {
     );
     if (!outcome || typeof outcome.point !== "number") continue;
 
+    // Totals ride along in the same request. Over and under carry the same
+    // number, so either outcome will do.
+    const totalsMarket = (book.markets ?? []).find((m: any) => m.key === "totals");
+    const totalPoint = (totalsMarket?.outcomes ?? [])[0]?.point;
+
     lines.push({
       homeTeam: event.home_team,
       awayTeam: event.away_team,
       commenceTime: new Date(event.commence_time),
       homeSpread: outcome.point,
+      overUnder: typeof totalPoint === "number" ? totalPoint : null,
       bookmaker: book.key,
     });
   }

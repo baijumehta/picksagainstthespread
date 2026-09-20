@@ -19,6 +19,8 @@ export interface PickFormGame {
   awayScore: number | null;
   homeScore: number | null;
   isTiebreaker: boolean;
+  /** Filled in with the favourite because the player missed the kickoff. */
+  isAutoPick: boolean;
 }
 
 export function PickForm({
@@ -180,6 +182,7 @@ function GameRow({
         <span>{game.kickoffLabel}</span>
         {game.league === "ncaaf" ? <Badge>NCAA</Badge> : null}
         {game.isTiebreaker ? <Badge tone="accent">Tiebreaker</Badge> : null}
+        {game.isAutoPick ? <Badge tone="push">auto: favourite</Badge> : null}
         {game.status === "in_progress" ? (
           <span className="inline-flex items-center gap-1 font-medium text-live">
             <LiveDot /> {game.statusDetail ?? "Live"} · {game.awayScore ?? 0}–{game.homeScore ?? 0}
