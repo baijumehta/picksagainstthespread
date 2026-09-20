@@ -124,7 +124,13 @@ export default async function SeasonPage() {
                 >
                   <td className="px-4 py-2 tabular-nums text-muted">{row.rank}</td>
                   <td className="px-2 py-2 font-semibold tracking-wide">
-                    {row.initials}
+                    <Link
+                      href={`/board?only=${row.initials}`}
+                      className="underline-offset-2 hover:text-accent hover:underline"
+                      title={`See ${row.initials}'s card for the current week`}
+                    >
+                      {row.initials}
+                    </Link>
                     {row.playerId === me?.id ? (
                       <span className="ml-1.5 rounded bg-accent px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent-fg">
                         you

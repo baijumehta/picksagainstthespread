@@ -164,7 +164,13 @@ export default async function BoardPage({ searchParams }: PageProps<"/board">) {
                         (row.playerId === me?.id ? "bg-accent/15 text-accent" : "")
                       }
                     >
-                      {row.initials}
+                      <Link
+                        href={`/board?week=${activeWeek.id}&only=${row.initials}`}
+                        className="underline-offset-2 hover:text-accent hover:underline"
+                        title={`See ${row.initials}'s card`}
+                      >
+                        {row.initials}
+                      </Link>
                     </th>
                   ))}
                 </tr>
