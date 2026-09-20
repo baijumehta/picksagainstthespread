@@ -154,7 +154,15 @@ export async function refreshScores(weekId: number): Promise<RefreshResult> {
     for (const game of list) {
       const fresh = game.espnId ? live.get(game.espnId) : undefined;
       if (!fresh) continue;
+
+      // Kickoff is tracked too, not just the score. The NFL flexes games
+      // between slots, and the kickoff time is what decides when a pick locks
+      // -- a stale one would either lock people out early or leave a game open
+      // after it had started.
+      const kickoffMoved = fresh.kickoffAt.getTime() !== game.kickoffAt.getTime();
+
       if (
+        !kickoffMoved &&
         fresh.homeScore === game.homeScore &&
         fresh.awayScore === game.awayScore &&
         fresh.status === game.status &&
@@ -166,6 +174,7 @@ export async function refreshScores(weekId: number): Promise<RefreshResult> {
         awayScore: fresh.awayScore,
         status: fresh.status,
         statusDetail: fresh.statusDetail,
+        kickoffAt: fresh.kickoffAt,
         updatedAt: new Date(),
       }).where(eq(games.id, game.id));
       changed++;
