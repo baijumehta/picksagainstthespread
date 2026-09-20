@@ -44,6 +44,27 @@ export function formatKickoff(d: Date): string {
   }).format(d);
 }
 
+/**
+ * "1:42:07 PM ET" — formatted on the server so it cannot disagree with what
+ * the client renders. Everything else in the app is shown in Eastern too.
+ */
+export function formatClock(d: Date): string {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    hour: "numeric", minute: "2-digit", second: "2-digit",
+  }).format(d) + " ET";
+}
+
+/** Each side's own number: "-3.5" for the favourite, "+3.5" for the dog. */
+export function sideLine(spread: string | number | null, side: "home" | "away"): string {
+  if (spread === null || spread === "") return "—";
+  const n = Number(spread);
+  if (!Number.isFinite(n)) return "—";
+  const v = side === "home" ? n : -n;
+  if (v === 0) return "PK";
+  return v > 0 ? `+${v}` : `${v}`;
+}
+
 export function formatKickoffShort(d: Date): string {
   return new Intl.DateTimeFormat("en-US", {
     timeZone: "America/New_York",

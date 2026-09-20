@@ -1,24 +1,30 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 /**
- * Re-renders the page on a timer while games are in progress.
+ * Says when the scores were last pulled, and re-renders the page on a timer
+ * while games are in progress.
  *
- * The server keeps the scores fresh; without this the viewer would be staring
- * at whatever was true when they loaded the page. Pauses while the tab is
- * hidden so a board left open overnight costs nothing.
+ * The timestamp is formatted on the server and passed in already-rendered, so
+ * it cannot disagree between server and client. Each refresh brings a new one
+ * down, which doubles as proof the loop is alive.
+ *
+ * Polling pauses while the tab is hidden, so a board left open overnight costs
+ * nothing.
  */
 export function LiveRefresh({
   active,
+  syncedAtLabel,
   intervalMs = 120_000,
 }: {
   active: boolean;
+  /** Pre-formatted, e.g. "1:42:07 PM ET". Null when scores have never synced. */
+  syncedAtLabel: string | null;
   intervalMs?: number;
 }) {
   const router = useRouter();
-  const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
 
   useEffect(() => {
     if (!active) return;
@@ -28,15 +34,9 @@ export function LiveRefresh({
     const tick = () => {
       if (document.visibilityState !== "visible") return;
       router.refresh();
-      setUpdatedAt(new Date());
     };
-
-    const start = () => {
-      if (timer === null) timer = setInterval(tick, intervalMs);
-    };
-    const stop = () => {
-      if (timer !== null) { clearInterval(timer); timer = null; }
-    };
+    const start = () => { if (timer === null) timer = setInterval(tick, intervalMs); };
+    const stop = () => { if (timer !== null) { clearInterval(timer); timer = null; } };
 
     const onVisibility = () => {
       if (document.visibilityState === "visible") { tick(); start(); }
@@ -48,13 +48,14 @@ export function LiveRefresh({
     return () => { stop(); document.removeEventListener("visibilitychange", onVisibility); };
   }, [active, intervalMs, router]);
 
-  if (!active) return null;
+  if (!syncedAtLabel && !active) return null;
 
   return (
     <span className="text-xs text-muted" aria-live="polite">
-      {updatedAt
-        ? `Updated ${updatedAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })}`
-        : "Updating automatically"}
+      {syncedAtLabel ? `Scores updated ${syncedAtLabel}` : "Waiting for the first scores"}
+      {active ? (
+        <span className="text-muted"> · checking every {Math.round(intervalMs / 60_000)} min</span>
+      ) : null}
     </span>
   );
 }

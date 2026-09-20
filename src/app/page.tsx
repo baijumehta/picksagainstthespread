@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { after } from "next/server";
-import { formatKickoffShort, loadWeekView } from "@/lib/pool";
+import { formatClock, formatKickoffShort, sideLine } from "@/lib/format";
+import { loadWeekView } from "@/lib/pool";
 import { buildStandings, gameCover, withRanks } from "@/lib/scoring";
 import { Badge, Card, CardHeader, EmptyState, LiveDot } from "@/components/ui";
 import { WeekNav } from "@/components/week-nav";
@@ -95,7 +96,10 @@ export default async function StandingsPage({
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <LiveRefresh active={liveGames.length > 0} />
+          <LiveRefresh
+            active={liveGames.length > 0}
+            syncedAtLabel={activeWeek.scoresSyncedAt ? formatClock(activeWeek.scoresSyncedAt) : null}
+          />
           <WeekNav weeks={weekList} activeWeekId={activeWeek.id} basePath="/" />
         </div>
       </div>
@@ -206,13 +210,15 @@ function LiveStrip({
   }[];
 }) {
   return (
-    <div className="flex gap-3 overflow-x-auto pb-1">
+    // Stacked rather than a side-scrolling strip: a full Sunday puts eight or
+    // more games up at once, and nobody should have to swipe to find one.
+    <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
       {games.map((g) => {
         const cover = gameCover(g as never);
         return (
           <div
             key={g.id}
-            className="min-w-[13rem] shrink-0 rounded-xl border border-line bg-surface px-3 py-2.5"
+            className="rounded-xl border border-line bg-surface px-3 py-2.5"
           >
             <div className="mb-1.5 flex items-center justify-between gap-2">
               <span className="inline-flex items-center gap-1 text-xs font-medium text-live">
@@ -222,11 +228,13 @@ function LiveStrip({
             </div>
             <ScoreLine
               label={g.awayAbbr ?? g.awayTeam}
+              line={sideLine(g.spread, "away")}
               score={g.awayScore}
               covering={cover === "away"}
             />
             <ScoreLine
               label={g.homeAbbr ?? g.homeTeam}
+              line={sideLine(g.spread, "home")}
               score={g.homeScore}
               covering={cover === "home"}
             />
@@ -238,14 +246,15 @@ function LiveStrip({
 }
 
 function ScoreLine({
-  label, score, covering,
+  label, line, score, covering,
 }: {
-  label: string; score: number | null; covering: boolean;
+  label: string; line: string; score: number | null; covering: boolean;
 }) {
   return (
     <div className="flex items-baseline justify-between gap-2 text-sm">
       <span className={covering ? "font-semibold" : "text-muted"}>
         {label}
+        <span className="ml-1 text-xs font-normal tabular-nums text-muted">{line}</span>
         {covering ? <span className="ml-1 text-xs text-win">cov</span> : null}
       </span>
       <span className="font-semibold tabular-nums">{score ?? 0}</span>

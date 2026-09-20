@@ -1,7 +1,6 @@
 import { after } from "next/server";
-import {
-  describeSpread, formatKickoffShort, isPickVisible, loadWeekView,
-} from "@/lib/pool";
+import { describeSpread, formatClock, formatKickoffShort } from "@/lib/format";
+import { isPickVisible, loadWeekView } from "@/lib/pool";
 import { buildStandings, pickOutcome, sortStandings } from "@/lib/scoring";
 import { Badge, Card, CardHeader, EmptyState, LiveDot, OutcomeCell } from "@/components/ui";
 import { WeekNav } from "@/components/week-nav";
@@ -81,7 +80,10 @@ export default async function BoardPage({ searchParams }: PageProps<"/board">) {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <LiveRefresh active={bundle.games.some((g) => g.status === "in_progress")} />
+          <LiveRefresh
+            active={bundle.games.some((g) => g.status === "in_progress")}
+            syncedAtLabel={activeWeek.scoresSyncedAt ? formatClock(activeWeek.scoresSyncedAt) : null}
+          />
           <WeekNav weeks={weekList} activeWeekId={activeWeek.id} basePath="/board" />
         </div>
       </div>
