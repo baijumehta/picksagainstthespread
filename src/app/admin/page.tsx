@@ -1,4 +1,4 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentPlayer } from "@/lib/auth";
 import { getCurrentSeason, listWeeks } from "@/lib/pool";
@@ -7,6 +7,7 @@ import { games as gamesTable, players as playersTable } from "@/db/schema";
 import { Badge, Card, CardHeader, EmptyState } from "@/components/ui";
 import { SetupNeeded } from "@/components/setup-needed";
 import { NewWeekForm, NewSeasonForm } from "./new-forms";
+import { SheetUpload } from "./sheet-upload";
 
 export const dynamic = "force-dynamic";
 
@@ -43,7 +44,7 @@ export default async function AdminPage() {
           href="/admin/players"
           className="text-sm font-medium text-accent hover:underline"
         >
-          Manage players ({activeCount}) →
+          Manage players ({activeCount}) â†’
         </Link>
       </div>
 
@@ -84,13 +85,13 @@ export default async function AdminPage() {
                           <Badge>draft</Badge>
                         )}
                         <span className="text-sm text-muted">
-                          {wg.length} games · {finals} final
+                          {wg.length} games Â· {finals} final
                         </span>
                         {noLine > 0 ? (
                           <Badge tone="push">{noLine} without a line</Badge>
                         ) : null}
                         {!w.tiebreakerGameId ? <Badge tone="push">no tiebreaker</Badge> : null}
-                        <span className="ml-auto text-sm text-accent">Open →</span>
+                        <span className="ml-auto text-sm text-accent">Open â†’</span>
                       </Link>
                     </li>
                   );
@@ -102,6 +103,16 @@ export default async function AdminPage() {
                 seasonId={season.id}
                 suggestedWeek={nextWeekNumber(weekList.map((w) => w.weekNumber))}
               />
+            </div>
+          </Card>
+
+          <Card>
+            <CardHeader
+              title="Upload a pick sheet"
+              subtitle="The finished sheet, exactly as you build it. Sets the week's lines, everyone's picks and the tiebreakers in one go."
+            />
+            <div className="px-5 py-4">
+              <SheetUpload />
             </div>
           </Card>
 
