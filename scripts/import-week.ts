@@ -40,6 +40,13 @@ async function main() {
   const s = await importParsedSheet(parsed, weekNumber, { dryRun });
 
   console.log(`\nmatched ${s.gamesMatched}/${s.gamesOnSheet} games`);
+  if (s.collegeAdded.length) {
+    console.log(`  college games ${dryRun ? "found" : "added"}: ${s.collegeAdded.join(", ")}`);
+  }
+  if (s.collegeUnresolved.length) {
+    console.log(`  ! college games not found on ESPN: ${s.collegeUnresolved.join(", ")}`);
+    console.log("    add them by hand from the admin week screen, then re-import.");
+  }
   if (s.unmatched.length) console.log(`  ! no game in the app for: ${s.unmatched.join(", ")}`);
   if (s.playersCreated.length) console.log(`  new players: ${s.playersCreated.join(", ")}`);
 

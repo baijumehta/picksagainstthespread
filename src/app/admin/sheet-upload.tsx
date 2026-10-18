@@ -113,6 +113,23 @@ export function SheetUpload() {
             </Notice>
           ) : null}
 
+          {summary.collegeAdded.length ? (
+            <Notice tone="ok">
+              College {summary.collegeAdded.length === 1 ? "game" : "games"} found on ESPN and{" "}
+              {summary.dryRun ? "will be added" : "added"} to the week:{" "}
+              <strong>{summary.collegeAdded.join(", ")}</strong>
+            </Notice>
+          ) : null}
+
+          {summary.collegeUnresolved.length ? (
+            <Notice tone="error">
+              Could not find {summary.collegeUnresolved.length === 1 ? "this college game" : "these college games"}{" "}
+              on ESPN: <strong>{summary.collegeUnresolved.join(", ")}</strong>. Add{" "}
+              {summary.collegeUnresolved.length === 1 ? "it" : "them"} from the week screen
+              under &quot;Add college games&quot;, then upload the sheet again.
+            </Notice>
+          ) : null}
+
           {summary.unmatched.length ? (
             <Notice tone="error">
               No game in the app for: {summary.unmatched.join(", ")}. Those picks are skipped.

@@ -2,30 +2,36 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { games, picks, players, seasons, weekEntries, weeks } from "@/db/schema";
-import { abbrForSheetTeam, looksLikeHomeTeam } from "./nfl-teams";
-import { importNflSlate } from "./sync";
+import { abbrForSheetTeam } from "./nfl-teams";
+import { matchCollegeGame } from "./college-teams";
+import { fetchCollegeDay } from "./espn";
+import { addCollegeGame, importNflSlate } from "./sync";
 
 /**
  * Reading the commissioner's own pick sheet.
  *
- *   Week # 1 | SPREAD | CBY | SAH | KK | ...     <- header, players from col C
- *   New England (Wed.) | +3.5 |     |     |  X   <- away team, spread on the dog
- *   SEATTLE            |       |  X  |  X  |     <- HOME TEAM in capitals
+ *   Week # 6 | SPREAD | CBY | SAH | KK | ...     <- header, players from col C
+ *   Seattle (Thur.)    |       |     |  X  |     <- away team
+ *   DENVER             | +2.5  |  X  |     |     <- HOME TEAM in capitals
  *   ...
- *   Tie Breaker*       |       |  47 |  63 |  42 <- Monday-night total guesses
+ *   Wake Forest        |       |     |  X  |     <- bye weeks bring college in
+ *   CAL BERKELEY       | +8.5  |  X  |     |
+ *   Tie Breaker*       |       |  47 |  63 |     <- Monday-night total guesses
  *
  * Shared by the CLI and the admin upload so both behave identically. Reads
- * .xls as well as .xlsx -- the sheets that actually arrive are the old format,
- * and making someone Save As every week is exactly the friction this removes.
+ * .xls as well as .xlsx, which is what actually arrives.
  */
 
 export type Side = "home" | "away";
+export type SheetLeague = "nfl" | "ncaaf";
 
 export interface SheetGame {
   awayRaw: string;
   homeRaw: string;
+  /** NFL abbreviations, or null for a college game. */
   awayAbbr: string | null;
   homeAbbr: string | null;
+  league: SheetLeague;
   /** Home-perspective spread, as the app stores it. */
   homeSpread: number | null;
   picks: Map<string, Side>;
@@ -37,6 +43,10 @@ export interface ParsedSheet {
   games: SheetGame[];
   tiebreakers: Map<string, number>;
 }
+
+/** Rows inside the games block that are notes rather than teams. */
+const LABEL_ROW =
+  /^(jackpot|running total|#\s*correct|\(\d+\s*games|byes?\s*:|home teams in|spread$|week\s*#)/i;
 
 /** "+3.5", "'+3.5", "-7" -> number. Blank -> null. */
 function parseSpread(text: string): number | null {
@@ -80,35 +90,40 @@ export function parseSheet(buffer: Buffer | ArrayBuffer): ParsedSheet {
   // A blank sheet sent out before the week has lines but no player columns.
   // That is a normal thing to import: it sets the spreads and nothing else.
 
-  // 3. Game rows come in away/HOME pairs until the tiebreaker or a gap.
+  // 3. The games block runs from the header to the tiebreaker.
+  let tiebreakerRow = grid.length;
+  for (let r = headerRow + 1; r < grid.length; r++) {
+    if (/tie\s*breaker/i.test(cell(r, 0))) { tiebreakerRow = r; break; }
+  }
+
+  /*
+   * Team rows are identified structurally -- any non-label row in the block,
+   * paired away-then-HOME -- rather than by recognising the team name.
+   *
+   * This used to key off the NFL lookup, so a row it did not recognise was
+   * skipped. During bye weeks he fills the card out with college games, and
+   * those vanished without a word: the sheet had 16 games and 14 arrived.
+   * Now an unrecognised pair is kept and marked as college, to be resolved
+   * against ESPN later or reported if it cannot be.
+   */
   const out: SheetGame[] = [];
-  const tiebreakers = new Map<string, number>();
   let pending: { raw: string; spread: number | null; row: number } | null = null;
 
-  for (let r = headerRow + 1; r < grid.length; r++) {
+  for (let r = headerRow + 1; r < tiebreakerRow; r++) {
     const a = cell(r, 0);
-
-    if (/tie\s*breaker/i.test(a)) {
-      for (const who of initials) {
-        const n = Number(cell(r, columnFor.get(who)!));
-        if (Number.isFinite(n) && n > 0) tiebreakers.set(who, n);
-      }
-      continue;
-    }
-    if (!a) continue;
-    if (/^(jackpot|running total|#\s*correct|\(\d+\s*games)/i.test(a)) continue;
-    if (a.startsWith("*") || /home teams in/i.test(a)) continue;
-
-    const abbr = abbrForSheetTeam(a);
-    if (!abbr) continue;
+    if (!a || LABEL_ROW.test(a) || a.startsWith("*")) continue;
 
     const spread = parseSpread(cell(r, 1));
 
-    if (!looksLikeHomeTeam(a)) {
+    if (!pending) {
       pending = { raw: a, spread, row: r };
       continue;
     }
-    if (!pending) continue;
+
+    // Second of the pair: this is the home team.
+    const awayAbbr = abbrForSheetTeam(pending.raw);
+    const homeAbbr = abbrForSheetTeam(a);
+    const league: SheetLeague = awayAbbr && homeAbbr ? "nfl" : "ncaaf";
 
     // The sheet puts the number on the underdog's line. Convert to the
     // home-perspective value the app stores.
@@ -126,12 +141,22 @@ export function parseSheet(buffer: Buffer | ArrayBuffer): ParsedSheet {
     out.push({
       awayRaw: pending.raw,
       homeRaw: a,
-      awayAbbr: abbrForSheetTeam(pending.raw),
-      homeAbbr: abbr,
+      awayAbbr,
+      homeAbbr,
+      league,
       homeSpread,
       picks: pickMap,
     });
     pending = null;
+  }
+
+  // 4. Tiebreaker guesses.
+  const tiebreakers = new Map<string, number>();
+  if (tiebreakerRow < grid.length) {
+    for (const who of initials) {
+      const n = Number(cell(tiebreakerRow, columnFor.get(who)!));
+      if (Number.isFinite(n) && n > 0) tiebreakers.set(who, n);
+    }
   }
 
   return { weekNumber, initials, games: out, tiebreakers };
@@ -155,11 +180,28 @@ export interface ImportSummary {
   gamesOnSheet: number;
   gamesMatched: number;
   unmatched: string[];
+  /** College games found on ESPN and added to the week. */
+  collegeAdded: string[];
+  /** College games on the sheet that could not be found. */
+  collegeUnresolved: string[];
   playersCreated: string[];
   picksWritten: number;
   tiebreakersWritten: number;
   lineChanges: LineChange[];
   dryRun: boolean;
+}
+
+/** The Thursday-to-Monday window a week's games fall in. */
+function weekDates(slate: { kickoffAt: Date }[]): Date[] {
+  if (!slate.length) return [];
+  const times = slate.map((g) => g.kickoffAt.getTime());
+  const start = new Date(Math.min(...times));
+  const end = new Date(Math.max(...times));
+  const days: Date[] = [];
+  for (let d = new Date(start); d <= end; d = new Date(d.getTime() + 864e5)) {
+    days.push(new Date(d));
+  }
+  return days;
 }
 
 /**
@@ -181,6 +223,8 @@ export async function importParsedSheet(
     gamesOnSheet: parsed.games.length,
     gamesMatched: 0,
     unmatched: [],
+    collegeAdded: [],
+    collegeUnresolved: [],
     playersCreated: [],
     picksWritten: 0,
     tiebreakersWritten: 0,
@@ -200,8 +244,7 @@ export async function importParsedSheet(
   if (!week) {
     summary.weekCreated = true;
     if (dryRun) {
-      // Nothing to compare against, so report and stop.
-      summary.unmatched = parsed.games.map((g) => `${g.awayAbbr} at ${g.homeAbbr}`);
+      summary.unmatched = parsed.games.map((g) => `${g.awayRaw} at ${g.homeRaw}`);
       return summary;
     }
     [week] = await db
@@ -215,6 +258,49 @@ export async function importParsedSheet(
     await importNflSlate(week.id, season.year, weekNumber);
     slate = await db.query.games.findMany({ where: eq(games.weekId, week.id) });
   }
+
+  /*
+   * College games are not in the NFL slate, so any the sheet carries have to
+   * be found on ESPN and added before their picks can go anywhere.
+   */
+  const sheetCollege = parsed.games.filter((g) => g.league === "ncaaf");
+  /** Sheet row -> the ESPN fixture it resolved to, so the main loop can reuse it. */
+  const resolvedCollege = new Map<SheetGame, { awayTeam: string; homeTeam: string }>();
+
+  if (sheetCollege.length) {
+    const have = new Set(
+      slate
+        .filter((g) => g.league === "ncaaf")
+        .map((g) => `${g.awayTeam}|${g.homeTeam}`.toLowerCase()),
+    );
+    const days = weekDates(slate);
+    const board: Awaited<ReturnType<typeof fetchCollegeDay>> = [];
+    for (const d of days) {
+      try {
+        board.push(...(await fetchCollegeDay(d)));
+      } catch {
+        // One bad day should not sink the import; it shows up as unresolved.
+      }
+    }
+
+    for (const g of sheetCollege) {
+      const hit = matchCollegeGame(g.awayRaw, g.homeRaw, board);
+      if (!hit) {
+        summary.collegeUnresolved.push(`${g.awayRaw} at ${g.homeRaw}`);
+        continue;
+      }
+      const key = `${hit.game.awayTeam}|${hit.game.homeTeam}`.toLowerCase();
+      summary.collegeAdded.push(`${hit.game.awayTeam} at ${hit.game.homeTeam}`);
+      resolvedCollege.set(g, hit.game);
+      if (!dryRun && !have.has(key)) {
+        await addCollegeGame(week.id, hit.game);
+      }
+    }
+    if (!dryRun && summary.collegeAdded.length) {
+      slate = await db.query.games.findMany({ where: eq(games.weekId, week.id) });
+    }
+  }
+
   const byPair = new Map(slate.map((g) => [`${g.awayAbbr}@${g.homeAbbr}`, g]));
 
   // --- players ---
@@ -240,9 +326,43 @@ export async function importParsedSheet(
 
   // --- lines and picks ---
   for (const g of parsed.games) {
-    const game = byPair.get(`${g.awayAbbr}@${g.homeAbbr}`);
+    let game = g.league === "nfl"
+      ? byPair.get(`${g.awayAbbr}@${g.homeAbbr}`)
+      : undefined;
+
+    if (!game && g.league === "ncaaf") {
+      const fixture = resolvedCollege.get(g);
+      if (fixture) {
+        // The row we just added, found by ESPN's own names.
+        game = slate.find(
+          (s) =>
+            s.league === "ncaaf" &&
+            s.awayTeam === fixture.awayTeam &&
+            s.homeTeam === fixture.homeTeam,
+        );
+        // On a dry run nothing was written, so there is no row to find --
+        // but it did resolve, and would be added for real. Count what it
+        // would bring with it so the preview totals are honest.
+        if (!game && dryRun) {
+          summary.gamesMatched++;
+          summary.picksWritten += g.picks.size;
+          if (g.homeSpread !== null) {
+            summary.lineChanges.push({
+              game: `${fixture.awayTeam} @ ${fixture.homeTeam}`,
+              from: null,
+              to: g.homeSpread.toFixed(1),
+              started: false,
+            });
+          }
+          continue;
+        }
+      }
+    }
+
     if (!game) {
-      summary.unmatched.push(`${g.awayAbbr ?? g.awayRaw} at ${g.homeAbbr ?? g.homeRaw}`);
+      if (g.league === "nfl") {
+        summary.unmatched.push(`${g.awayAbbr ?? g.awayRaw} at ${g.homeAbbr ?? g.homeRaw}`);
+      }
       continue;
     }
     summary.gamesMatched++;
@@ -251,7 +371,7 @@ export async function importParsedSheet(
       const next = g.homeSpread.toFixed(1);
       if (game.spread !== next) {
         summary.lineChanges.push({
-          game: `${game.awayAbbr} @ ${game.homeAbbr}`,
+          game: `${game.awayAbbr ?? game.awayTeam} @ ${game.homeAbbr ?? game.homeTeam}`,
           from: game.spread,
           to: next,
           started: game.status !== "scheduled" || now >= game.kickoffAt,
@@ -295,7 +415,10 @@ export async function importParsedSheet(
 
   // The last game of the week settles ties -- Monday night, per the sheet.
   if (!dryRun && !week.tiebreakerGameId && slate.length) {
-    const last = [...slate].sort((a, b) => a.kickoffAt.getTime() - b.kickoffAt.getTime()).at(-1)!;
+    const nfl = slate.filter((g) => g.league === "nfl");
+    const last = [...(nfl.length ? nfl : slate)]
+      .sort((a, b) => a.kickoffAt.getTime() - b.kickoffAt.getTime())
+      .at(-1)!;
     await db.update(weeks).set({ tiebreakerGameId: last.id }).where(eq(weeks.id, week.id));
   }
 
